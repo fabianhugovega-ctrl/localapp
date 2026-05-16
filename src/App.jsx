@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from './supabase.js';
 
 // ══════════════════════════════════════════════════════════════════
 // CONFIG & CONSTANTS
@@ -56,36 +57,6 @@ const tagColor=(tag,allTags)=>TAG_PALETTE[Math.max(0,allTags.indexOf(tag))%TAG_P
 const getWeekDates=(base)=>{const d=new Date(base);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));return Array.from({length:7},(_,i)=>{const dd=new Date(mon);dd.setDate(mon.getDate()+i);return dd;});};
 
 // ══════════════════════════════════════════════════════════════════
-// SAMPLE DATA
-// ══════════════════════════════════════════════════════════════════
-const INIT_CLIENTS=[
-  {id:1,name:"María González",phone:"11-4523-7890",email:"maria@gmail.com",tags:["VIP","frecuente"],notes:"Prefiere WhatsApp.",visits:[{date:"2024-05-10",description:"Compra primavera",amount:8500,items:[{id:1,qty:2}]}],reminders:[{id:101,text:"Llamar para nueva temporada",date:"2024-06-01",done:false}],lastVisit:"2024-05-10",totalSpent:8500},
-  {id:2,name:"Carlos Ruiz",phone:"11-6789-0123",email:"carlos@hotmail.com",tags:["nuevo"],notes:"Referido por María.",visits:[],reminders:[{id:102,text:"Enviar catálogo",date:"2024-05-28",done:false}],lastVisit:null,totalSpent:0},
-  {id:3,name:"Laura Pérez",phone:"11-3344-5566",email:"lau@yahoo.com",tags:["VIP","mayorista"],notes:"Pide siempre factura A.",visits:[{date:"2024-05-05",description:"Compra mayorista",amount:45000,items:[{id:2,qty:10}]}],reminders:[],lastVisit:"2024-05-05",totalSpent:45000},
-  {id:4,name:"Diego Morales",phone:"11-9900-1122",email:"",tags:["ocasional"],notes:"Solo fechas especiales.",visits:[{date:"2024-05-18",description:"Regalo",amount:6000,items:[]}],reminders:[],lastVisit:"2024-05-18",totalSpent:6000},
-];
-const INIT_PRODUCTS=[
-  {id:1,name:"Remera básica",sku:"REM-001",category:"Ropa",price:3500,cost:1800,stock:24,minStock:10},
-  {id:2,name:"Pantalón cargo",sku:"PAN-002",category:"Ropa",price:8900,cost:4200,stock:3,minStock:8},
-  {id:3,name:"Campera impermeable",sku:"CAM-003",category:"Ropa",price:18500,cost:9000,stock:7,minStock:5},
-  {id:4,name:"Medias deportivas x3",sku:"MED-004",category:"Accesorios",price:1200,cost:500,stock:2,minStock:15},
-  {id:5,name:"Cinturón cuero",sku:"CIN-005",category:"Accesorios",price:4500,cost:2000,stock:12,minStock:5},
-];
-const INIT_MOVEMENTS=[
-  {id:1,type:"ingreso",category:"Venta",description:"Venta a María González",amount:8500,date:"2024-05-10",clientId:1},
-  {id:2,type:"egreso",category:"Proveedor",description:"Compra stock remeras",amount:18000,date:"2024-05-08",clientId:null},
-  {id:3,type:"ingreso",category:"Venta",description:"Venta Laura Pérez",amount:45000,date:"2024-05-05",clientId:3},
-  {id:4,type:"egreso",category:"Servicios",description:"Alquiler local mayo",amount:35000,date:"2024-05-01",clientId:null},
-  {id:5,type:"ingreso",category:"Venta",description:"Venta Diego Morales",amount:6000,date:"2024-05-18",clientId:4},
-  {id:6,type:"egreso",category:"Servicios",description:"Luz y servicios",amount:8500,date:"2024-05-03",clientId:null},
-];
-const makeAppts=()=>{
-  const base=new Date();base.setDate(base.getDate()-base.getDay()+1);
-  const add=(dOff,h,dur,cId,svc,col)=>{const d=new Date(base);d.setDate(base.getDate()+dOff);return{id:mkId(),date:dateKey(d),hour:h,minute:0,duration:dur,clientId:cId,clientName:INIT_CLIENTS.find(c=>c.id===cId)?.name||"Sin cliente",service:svc,notes:"",color:col,status:"confirmado"};};
-  return[add(0,9,60,1,"Consulta","#6366f1"),add(0,11,30,2,"Servicio general","#0891b2"),add(1,10,90,3,"Entrega","#d97706"),add(2,9,60,4,"Consulta","#16a34a"),add(2,14,60,1,"Servicio general","#6366f1"),add(3,11,45,2,"Consulta","#0891b2"),add(4,10,60,3,"Entrega","#d97706")];
-};
-
-// ══════════════════════════════════════════════════════════════════
 // GLOBAL STYLES
 // ══════════════════════════════════════════════════════════════════
 const makeStyles=(accent)=>`
@@ -127,6 +98,7 @@ input,textarea,select{font-family:'Instrument Sans',sans-serif}
 .appt-block{border-radius:8px;padding:5px 8px;cursor:pointer;transition:all .14s;overflow:hidden;border-left:3px solid;position:absolute}
 .appt-block:hover{filter:brightness(0.92);transform:scale(1.015);z-index:10}
 .settings-section{background:#fafaf8;border:1.5px solid #e8e4dc;border-radius:14px;padding:20px;margin-bottom:14px}
+.loading{display:flex;align-items:center;justify-content:center;height:100%;font-size:14px;color:#aaa;gap:10px}
 `;
 
 // ══════════════════════════════════════════════════════════════════
@@ -135,20 +107,61 @@ input,textarea,select{font-family:'Instrument Sans',sans-serif}
 export default function App() {
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [tab, setTab] = useState("dashboard");
-  const [clients, setClients] = useState(INIT_CLIENTS);
-  const [products, setProducts] = useState(INIT_PRODUCTS);
-  const [movements, setMovements] = useState(INIT_MOVEMENTS);
-  const [appointments, setAppointments] = useState(makeAppts());
+  const [clients, setClients] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [movements, setMovements] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selClient, setSelClient] = useState(null);
+
+  // Cargar todos los datos al iniciar
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    setLoading(true);
+    try {
+      const [c, p, m, a, r, v] = await Promise.all([
+        supabase.from('clients').select('*').order('created_at', { ascending: false }),
+        supabase.from('products').select('*').order('created_at', { ascending: false }),
+        supabase.from('movements').select('*').order('date', { ascending: false }),
+        supabase.from('appointments').select('*').order('date', { ascending: true }),
+        supabase.from('reminders').select('*'),
+        supabase.from('visits').select('*').order('date', { ascending: false }),
+      ]);
+
+      const remindersData = r.data || [];
+      const visitsData = v.data || [];
+
+      const clientsWithData = (c.data || []).map(cl => ({
+        ...cl,
+        tags: cl.tags || [],
+        reminders: remindersData.filter(rem => rem.client_id === cl.id),
+        visits: visitsData.filter(vis => vis.client_id === cl.id),
+        totalSpent: cl.total_spent || 0,
+        lastVisit: cl.last_visit,
+      }));
+
+      setClients(clientsWithData);
+      setProducts(p.data || []);
+      setMovements(m.data || []);
+      setAppointments((a.data || []).map(ap => ({
+        ...ap,
+        clientName: ap.client_name,
+      })));
+    } catch(e) {
+      console.error('Error cargando datos:', e);
+    }
+    setLoading(false);
+  };
 
   const fmt=(n)=>n===0?"—":`${config.moneda}${Number(n).toLocaleString("es-AR")}`;
   const tColor=(t)=>tagColor(t,config.clientTags);
 
-  const lowStock=products.filter(p=>p.stock<=p.minStock);
+  const lowStock=products.filter(p=>p.stock<=p.min_stock);
   const totalRem=clients.reduce((a,c)=>a+c.reminders.filter(r=>!r.done).length,0);
   const todayAppts=appointments.filter(a=>a.date===todayStr()&&a.status!=="cancelado").length;
-  const totalIngresos=movements.filter(m=>m.type==="ingreso").reduce((a,m)=>a+m.amount,0);
-  const totalEgresos=movements.filter(m=>m.type==="egreso").reduce((a,m)=>a+m.amount,0);
+  const totalIngresos=movements.filter(m=>m.type==="ingreso").reduce((a,m)=>a+Number(m.amount),0);
+  const totalEgresos=movements.filter(m=>m.type==="egreso").reduce((a,m)=>a+Number(m.amount),0);
   const saldo=totalIngresos-totalEgresos;
 
   const NAV=[
@@ -159,6 +172,16 @@ export default function App() {
     {key:"caja",icon:"◎",label:"Caja"},
     {key:"config",icon:"⚙",label:"Configuración"},
   ];
+
+  if(loading) return (
+    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif"}}>
+      <style>{makeStyles(config.accentColor)}</style>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,marginBottom:8}}>LocalApp</div>
+        <div style={{color:"#aaa",fontSize:14}}>Cargando datos...</div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{display:"flex",height:"100vh",background:"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif",overflow:"hidden"}}>
@@ -193,11 +216,11 @@ export default function App() {
       {/* CONTENT */}
       <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
         {tab==="dashboard" && <Dashboard clients={clients} products={products} movements={movements} appointments={appointments} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} lowStock={lowStock} setTab={setTab} fmt={fmt} config={config} tColor={tColor}/>}
-        {tab==="clientes" && <Clientes clients={clients} setClients={setClients} products={products} setMovements={setMovements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor}/>}
-        {tab==="agenda" && <Agenda appointments={appointments} setAppointments={setAppointments} clients={clients} config={config}/>}
-        {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt}/>}
-        {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt}/>}
-        {tab==="config" && <Config config={config} setConfig={setConfig} setClients={setClients} setProducts={setProducts} setMovements={setMovements} setAppointments={setAppointments}/>}
+        {tab==="clientes" && <Clientes clients={clients} setClients={setClients} products={products} setMovements={setMovements} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll}/>}
+        {tab==="agenda" && <Agenda appointments={appointments} setAppointments={setAppointments} clients={clients} config={config} reload={loadAll}/>}
+        {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt} reload={loadAll}/>}
+        {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll}/>}
+        {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll}/>}
       </div>
     </div>
   );
@@ -207,7 +230,7 @@ export default function App() {
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,totalEgresos,lowStock,setTab,fmt,config,tColor}){
-  const recentMovs=[...movements].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const recentMovs=[...movements].sort((a,b)=>b.date?.localeCompare(a.date)).slice(0,5);
   const topClients=[...clients].sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,4);
   const todayAppts=appointments.filter(a=>a.date===todayStr()).sort((a,b)=>a.hour-b.hour);
   const pendingRem=clients.flatMap(c=>c.reminders.filter(r=>!r.done).map(r=>({...r,clientName:c.name}))).slice(0,4);
@@ -219,7 +242,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
 
       {lowStock.length>0&&<div className="alert-banner"><span style={{fontSize:18}}>⚠️</span><span style={{fontWeight:700,fontSize:13}}>Stock bajo: {lowStock.map(p=>p.name).join(", ")}</span><button className="btn btn-outline btn-sm" style={{marginLeft:"auto"}} onClick={()=>setTab("stock")}>Ver</button></div>}
 
-      {/* Stats row */}
       <div style={{display:"flex",gap:12,marginBottom:20}}>
         {[
           {label:"Saldo",value:fmt(saldo),color:saldo>=0?"#166534":"#7f1d1d"},
@@ -237,7 +259,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
-        {/* Movimientos recientes */}
         <div className="card" style={{padding:18}}>
           <div className="sec">Últimos movimientos</div>
           {recentMovs.map(m=>(
@@ -250,7 +271,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           {recentMovs.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:12}}>Sin movimientos</div>}
         </div>
 
-        {/* Turnos de hoy */}
         <div className="card" style={{padding:18}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
             <div className="sec" style={{marginBottom:0}}>Turnos de hoy</div>
@@ -259,7 +279,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           {todayAppts.map(a=>(
             <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:"1px solid #f5f3ef"}}>
               <div style={{width:4,height:32,borderRadius:2,background:a.color,flexShrink:0}}/>
-              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{a.clientName}</div><div style={{fontSize:11,color:"#aaa"}}>{fmtHour(a.hour,a.minute)} · {a.service}</div></div>
+              <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{a.clientName||a.client_name}</div><div style={{fontSize:11,color:"#aaa"}}>{fmtHour(a.hour,a.minute)} · {a.service}</div></div>
               <span style={{fontSize:10.5,fontWeight:700,padding:"2px 7px",borderRadius:10,background:STATUS_STYLES[a.status]?.bg,color:STATUS_STYLES[a.status]?.text}}>{STATUS_STYLES[a.status]?.label}</span>
             </div>
           ))}
@@ -268,7 +288,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-        {/* Top clientes */}
         <div className="card" style={{padding:18}}>
           <div className="sec">Top clientes</div>
           {topClients.map((c,i)=>(
@@ -279,9 +298,9 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
               <div style={{fontWeight:700,fontSize:13}}>{fmt(c.totalSpent)}</div>
             </div>
           ))}
+          {topClients.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:12}}>Sin clientes</div>}
         </div>
 
-        {/* Recordatorios pendientes */}
         <div className="card" style={{padding:18}}>
           <div className="sec">Recordatorios pendientes</div>
           {pendingRem.map(r=>(
@@ -300,7 +319,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
 // ══════════════════════════════════════════════════════════════════
 // CLIENTES
 // ══════════════════════════════════════════════════════════════════
-function Clientes({clients,setClients,products,setMovements,selClient,setSelClient,config,fmt,tColor}){
+function Clientes({clients,setClients,products,setMovements,movements,selClient,setSelClient,config,fmt,tColor,reload}){
   const [search,setSearch]=useState("");
   const [filterTag,setFilterTag]=useState("Todos");
   const [showNew,setShowNew]=useState(false);
@@ -313,69 +332,111 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
   const [newRem,setNewRem]=useState({text:"",date:""});
   const [editNote,setEditNote]=useState(false);
   const [noteVal,setNoteVal]=useState("");
+  const [saving,setSaving]=useState(false);
 
-  useEffect(()=>{if(selClient){setNoteVal(selClient.notes);setEditNote(false);}},[selClient]);
+  useEffect(()=>{if(selClient){setNoteVal(selClient.notes||"");setEditNote(false);}},[selClient]);
 
   const allTags=["Todos",...config.clientTags];
   const filtered=clients.filter(c=>{
-    const ms=c.name.toLowerCase().includes(search.toLowerCase())||c.phone.includes(search);
-    const mt=filterTag==="Todos"||c.tags.includes(filterTag);
+    const ms=c.name.toLowerCase().includes(search.toLowerCase())||(c.phone||"").includes(search);
+    const mt=filterTag==="Todos"||(c.tags||[]).includes(filterTag);
     return ms&&mt;
   });
-  const upd=(updated)=>{setClients(p=>p.map(c=>c.id===updated.id?updated:c));setSelClient(updated);};
-  const addClient=()=>{if(!newC.name)return;const c={id:mkId(),...newC,tags:newC.tags?newC.tags.split(",").map(t=>t.trim()):[],visits:[],reminders:[],lastVisit:null,totalSpent:0};setClients(p=>[c,...p]);setShowNew(false);setNewC({name:"",phone:"",email:"",tags:"",notes:""});};
-  const saleTotal=saleItems.reduce((a,si)=>{const p=products.find(p=>p.id===Number(si.productId));return a+(p?p.price*si.qty:0);},0);
-  const addSale=()=>{
-    const valid=saleItems.filter(si=>si.productId&&si.qty>0);if(!valid.length)return;
-    const desc=saleDesc||`Venta a ${selClient.name}`;
-    const visit={date:saleDate,description:desc,amount:saleTotal,items:valid.map(si=>({id:Number(si.productId),qty:si.qty}))};
-    upd({...selClient,visits:[visit,...selClient.visits],lastVisit:saleDate,totalSpent:selClient.totalSpent+saleTotal});
-    setMovements(p=>[{id:mkId(),type:"ingreso",category:config.catIngreso[0],description:desc,amount:saleTotal,date:saleDate,clientId:selClient.id},...p]);
-    setSaleItems([{productId:"",qty:1}]);setSaleDesc("");setSaleDate(todayStr());setShowSale(false);
-  };
-  const addRem=()=>{if(!newRem.text||!newRem.date)return;upd({...selClient,reminders:[...selClient.reminders,{id:mkId(),...newRem,done:false}]});setNewRem({text:"",date:""});setShowRem(false);};
 
-  if(selClient) return(
+  const addClient=async()=>{
+    if(!newC.name)return;
+    setSaving(true);
+    const tags=newC.tags?newC.tags.split(",").map(t=>t.trim()):[];
+    const {data,error}=await supabase.from('clients').insert({name:newC.name,phone:newC.phone,email:newC.email,tags,notes:newC.notes,total_spent:0}).select().single();
+    if(!error&&data){await reload();}
+    setSaving(false);setShowNew(false);setNewC({name:"",phone:"",email:"",tags:"",notes:""});
+  };
+
+  const saveNote=async()=>{
+    if(!selClient)return;
+    await supabase.from('clients').update({notes:noteVal}).eq('id',selClient.id);
+    await reload();
+    setEditNote(false);
+  };
+
+  const addRem=async()=>{
+    if(!newRem.text||!newRem.date||!selClient)return;
+    await supabase.from('reminders').insert({client_id:selClient.id,text:newRem.text,date:newRem.date,done:false});
+    await reload();
+    setNewRem({text:"",date:""});setShowRem(false);
+  };
+
+  const toggleRem=async(rem)=>{
+    await supabase.from('reminders').update({done:!rem.done}).eq('id',rem.id);
+    await reload();
+  };
+
+  const deleteRem=async(remId)=>{
+    await supabase.from('reminders').delete().eq('id',remId);
+    await reload();
+  };
+
+  const saleTotal=saleItems.reduce((a,si)=>{const p=products.find(p=>p.id===Number(si.productId));return a+(p?p.price*si.qty:0);},0);
+
+  const addSale=async()=>{
+    const valid=saleItems.filter(si=>si.productId&&si.qty>0);if(!valid.length||!selClient)return;
+    setSaving(true);
+    const desc=saleDesc||`Venta a ${selClient.name}`;
+    await supabase.from('visits').insert({client_id:selClient.id,date:saleDate,description:desc,amount:saleTotal});
+    await supabase.from('clients').update({total_spent:(selClient.totalSpent||0)+saleTotal,last_visit:saleDate}).eq('id',selClient.id);
+    await supabase.from('movements').insert({type:'ingreso',category:config.catIngreso[0],description:desc,amount:saleTotal,date:saleDate,client_id:selClient.id});
+    await reload();
+    setSaleItems([{productId:"",qty:1}]);setSaleDesc("");setSaleDate(todayStr());setShowSale(false);setSaving(false);
+  };
+
+  const updSelClient=()=>{
+    const updated=clients.find(c=>c.id===selClient?.id);
+    if(updated)setSelClient(updated);
+  };
+  useEffect(()=>{updSelClient();},[clients]);
+
+  if(selClient){
+    const sc=clients.find(c=>c.id===selClient.id)||selClient;
+    return(
     <div style={{padding:24}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:22}}>
         <button className="btn btn-outline" onClick={()=>setSelClient(null)}>← Volver</button>
-        <div><div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800}}>{selClient.name}</div>
-        <div style={{display:"flex",gap:5,marginTop:4}}>{selClient.tags.map(t=>{const tc=tColor(t);return<span key={t} className="tag" style={{background:tc.bg,color:tc.text,borderColor:tc.border}}>{t}</span>;})}</div></div>
+        <div><div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800}}>{sc.name}</div>
+        <div style={{display:"flex",gap:5,marginTop:4}}>{(sc.tags||[]).map(t=>{const tc=tColor(t);return<span key={t} className="tag" style={{background:tc.bg,color:tc.text,borderColor:tc.border}}>{t}</span>;})}</div></div>
         <button className="btn btn-green" style={{marginLeft:"auto"}} onClick={()=>setShowSale(true)}>+ Registrar venta</button>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:16,alignItems:"start"}}>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div className="card" style={{padding:18}}>
             <div className="sec">Contacto</div>
-            {[["📱",selClient.phone||"—"],["✉️",selClient.email||"Sin email"],["💰",fmt(selClient.totalSpent)+" total"]].map(([ic,v],i)=>(
+            {[["📱",sc.phone||"—"],["✉️",sc.email||"Sin email"],["💰",fmt(sc.totalSpent||0)+" total"]].map(([ic,v],i)=>(
               <div key={i} style={{display:"flex",gap:10,alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f5f3ef"}}><span style={{fontSize:15}}>{ic}</span><span style={{fontSize:13.5}}>{v}</span></div>
             ))}
           </div>
           <div className="card" style={{padding:18}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><div className="sec" style={{marginBottom:0}}>Notas</div>{!editNote&&<button className="btn btn-outline btn-sm" onClick={()=>setEditNote(true)}>Editar</button>}</div>
-            {editNote?<><textarea className="field" rows={4} value={noteVal} onChange={e=>setNoteVal(e.target.value)} style={{resize:"vertical"}} autoFocus/><div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}><button className="btn btn-outline btn-sm" onClick={()=>setEditNote(false)}>Cancelar</button><button className="btn btn-dark btn-sm" onClick={()=>{upd({...selClient,notes:noteVal});setEditNote(false);}}>Guardar</button></div></>
+            {editNote?<><textarea className="field" rows={4} value={noteVal} onChange={e=>setNoteVal(e.target.value)} style={{resize:"vertical"}} autoFocus/><div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}><button className="btn btn-outline btn-sm" onClick={()=>setEditNote(false)}>Cancelar</button><button className="btn btn-dark btn-sm" onClick={saveNote}>Guardar</button></div></>
             :<div style={{fontSize:13.5,color:noteVal?"#18181b":"#aaa",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{noteVal||"Sin notas."}</div>}
           </div>
           <div className="card" style={{padding:18}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div className="sec" style={{marginBottom:0}}>Recordatorios</div><button className="btn btn-outline btn-sm" onClick={()=>setShowRem(true)}>+ Agregar</button></div>
-            {selClient.reminders.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"8px 0"}}>Sin recordatorios</div>}
-            {selClient.reminders.map(r=>(
+            {(sc.reminders||[]).length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"8px 0"}}>Sin recordatorios</div>}
+            {(sc.reminders||[]).map(r=>(
               <div key={r.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"9px 11px",borderRadius:10,border:"1.5px solid #ede9e3",marginBottom:7,background:"#fafaf8",opacity:r.done?.55:1}}>
-                <input type="checkbox" checked={r.done} onChange={()=>upd({...selClient,reminders:selClient.reminders.map(x=>x.id===r.id?{...x,done:!x.done}:x)})} style={{marginTop:3,accentColor:"#18181b",cursor:"pointer"}}/>
+                <input type="checkbox" checked={r.done} onChange={()=>toggleRem(r)} style={{marginTop:3,accentColor:"#18181b",cursor:"pointer"}}/>
                 <div style={{flex:1}}><div style={{fontSize:13.5,textDecoration:r.done?"line-through":"none"}}>{r.text}</div><div style={{fontSize:11.5,color:"#aaa",marginTop:2}}>📅 {fmtDate(r.date)}</div></div>
-                <button className="btn btn-red btn-sm" onClick={()=>upd({...selClient,reminders:selClient.reminders.filter(x=>x.id!==r.id)})}>✕</button>
+                <button className="btn btn-red btn-sm" onClick={()=>deleteRem(r.id)}>✕</button>
               </div>
             ))}
           </div>
         </div>
         <div className="card" style={{padding:18}}>
-          <div className="sec">Historial ({selClient.visits.length})</div>
-          {selClient.visits.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"20px 0"}}>Sin visitas registradas</div>}
-          {selClient.visits.map((v,i)=>(
+          <div className="sec">Historial ({(sc.visits||[]).length})</div>
+          {(sc.visits||[]).length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"20px 0"}}>Sin visitas registradas</div>}
+          {(sc.visits||[]).map((v,i)=>(
             <div key={i} style={{padding:"11px 13px",borderRadius:11,border:"1.5px solid #ede9e3",marginBottom:9,background:"#fafaf8"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div><div style={{fontSize:14,fontWeight:600}}>{v.description}</div><div style={{fontSize:12,color:"#aaa",marginTop:2}}>📅 {fmtDate(v.date)}</div>
-                {v.items?.length>0&&<div style={{marginTop:5,display:"flex",gap:5,flexWrap:"wrap"}}>{v.items.map((it,j)=>{const p=products.find(p=>p.id===it.id);return p?<span key={j} style={{fontSize:11,background:"#f0ede8",border:"1px solid #e2dfd8",borderRadius:6,padding:"2px 7px",color:"#555"}}>{p.name} ×{it.qty}</span>:null;})}</div>}</div>
+                <div><div style={{fontSize:14,fontWeight:600}}>{v.description}</div><div style={{fontSize:12,color:"#aaa",marginTop:2}}>📅 {fmtDate(v.date)}</div></div>
                 <div style={{fontWeight:700,fontSize:15,color:v.amount>0?"#166534":"#aaa"}}>{v.amount>0?fmt(v.amount):"Sin venta"}</div>
               </div>
             </div>
@@ -384,7 +445,7 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
       </div>
 
       {showSale&&<div className="modal-bg" onClick={()=>setShowSale(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:16}}>Registrar venta — {selClient.name}</div>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:16}}>Registrar venta — {sc.name}</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <input className="field" placeholder="Descripción" value={saleDesc} onChange={e=>setSaleDesc(e.target.value)}/>
           <input className="field" type="date" value={saleDate} onChange={e=>setSaleDate(e.target.value)}/>
@@ -399,7 +460,7 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
           <button className="btn btn-outline btn-sm" style={{alignSelf:"flex-start"}} onClick={()=>setSaleItems(p=>[...p,{productId:"",qty:1}])}>+ Producto</button>
           {saleTotal>0&&<div style={{background:"#f0fdf4",border:"1.5px solid #86efac",borderRadius:10,padding:"9px 13px",fontWeight:700,fontSize:14,color:"#166534"}}>Total: {fmt(saleTotal)}</div>}
         </div>
-        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowSale(false)}>Cancelar</button><button className="btn btn-green" onClick={addSale}>Confirmar venta</button></div>
+        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowSale(false)}>Cancelar</button><button className="btn btn-green" onClick={addSale} disabled={saving}>{saving?"Guardando...":"Confirmar venta"}</button></div>
       </div></div>}
 
       {showRem&&<div className="modal-bg" onClick={()=>setShowRem(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:380}}>
@@ -411,7 +472,7 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
         <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowRem(false)}>Cancelar</button><button className="btn btn-dark" onClick={addRem}>Guardar</button></div>
       </div></div>}
     </div>
-  );
+  );}
 
   return(
     <div style={{padding:24}}>
@@ -428,12 +489,12 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
           <div key={c.id} className="row-h" style={{display:"flex",alignItems:"center",gap:12,padding:"11px 13px"}} onClick={()=>setSelClient(c)}>
             <div style={{width:38,height:38,borderRadius:"50%",background:avatarBg(c.id),color:avatarTxt(c.id),display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14,flexShrink:0}}>{c.name[0]}</div>
             <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:14}}>{c.name}</div><div style={{fontSize:12,color:"#888",marginTop:1}}>{c.phone}{c.email?` · ${c.email}`:""}</div></div>
-            <div style={{display:"flex",gap:4}}>{c.tags.slice(0,2).map(t=>{const tc=tColor(t);return<span key={t} className="tag" style={{background:tc.bg,color:tc.text,borderColor:tc.border}}>{t}</span>;})}</div>
-            <div style={{textAlign:"right",minWidth:90}}><div style={{fontWeight:700,fontSize:14}}>{fmt(c.totalSpent)}</div><div style={{fontSize:11,color:"#aaa"}}>{c.lastVisit?`Última: ${fmtDate(c.lastVisit)}`:"Sin visitas"}</div></div>
-            {c.reminders.filter(r=>!r.done).length>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{c.reminders.filter(r=>!r.done).length}</span>}
+            <div style={{display:"flex",gap:4}}>{(c.tags||[]).slice(0,2).map(t=>{const tc=tColor(t);return<span key={t} className="tag" style={{background:tc.bg,color:tc.text,borderColor:tc.border}}>{t}</span>;})}</div>
+            <div style={{textAlign:"right",minWidth:90}}><div style={{fontWeight:700,fontSize:14}}>{fmt(c.totalSpent||0)}</div><div style={{fontSize:11,color:"#aaa"}}>{c.lastVisit?`Última: ${fmtDate(c.lastVisit)}`:"Sin visitas"}</div></div>
+            {(c.reminders||[]).filter(r=>!r.done).length>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:10,fontWeight:700,padding:"1px 6px"}}>{c.reminders.filter(r=>!r.done).length}</span>}
           </div>
         ))}
-        {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin resultados</div>}
+        {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin clientes. ¡Agregá el primero!</div>}
       </div>
       {showNew&&<div className="modal-bg" onClick={()=>setShowNew(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:16}}>Nuevo cliente</div>
@@ -441,7 +502,7 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
           {[["Nombre completo *","name","text"],["Teléfono","phone","text"],["Email","email","email"],["Etiquetas (ej: VIP, frecuente)","tags","text"]].map(([pl,key,type])=><input key={key} className="field" placeholder={pl} type={type} value={newC[key]} onChange={e=>setNewC(p=>({...p,[key]:e.target.value}))}/>)}
           <textarea className="field" placeholder="Notas" rows={3} value={newC.notes} onChange={e=>setNewC(p=>({...p,notes:e.target.value}))}/>
         </div>
-        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className="btn btn-dark" onClick={addClient}>Agregar</button></div>
+        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className="btn btn-dark" onClick={addClient} disabled={saving}>{saving?"Guardando...":"Agregar"}</button></div>
       </div></div>}
     </div>
   );
@@ -450,7 +511,7 @@ function Clientes({clients,setClients,products,setMovements,selClient,setSelClie
 // ══════════════════════════════════════════════════════════════════
 // AGENDA
 // ══════════════════════════════════════════════════════════════════
-function Agenda({appointments,setAppointments,clients,config}){
+function Agenda({appointments,setAppointments,clients,config,reload}){
   const [viewMode,setViewMode]=useState("week");
   const [curDate,setCurDate]=useState(todayDate());
   const [showModal,setShowModal]=useState(false);
@@ -464,15 +525,40 @@ function Agenda({appointments,setAppointments,clients,config}){
   const apptsByDate=(d)=>appointments.filter(a=>a.date===dateKey(d));
   const openNew=(date,hour)=>{setEditAppt(null);setQDate(date||todayStr());setQHour(hour||9);setShowModal(true);};
   const openEdit=(a)=>{setEditAppt(a);setSelAppt(null);setShowModal(true);};
-  const saveAppt=(a)=>{if(a.id&&appointments.find(x=>x.id===a.id))setAppointments(p=>p.map(x=>x.id===a.id?a:x));else setAppointments(p=>[...p,{...a,id:mkId()}]);setShowModal(false);};
-  const delAppt=(id)=>{setAppointments(p=>p.filter(a=>a.id!==id));setSelAppt(null);setShowModal(false);};
+
+  const saveAppt=async(form)=>{
+    if(form.id){
+      await supabase.from('appointments').update({
+        client_id:form.clientId||null,client_name:form.clientName,service:form.service,
+        date:form.date,hour:form.hour,minute:form.minute,duration:form.duration,
+        color:form.color,notes:form.notes,status:form.status
+      }).eq('id',form.id);
+    } else {
+      await supabase.from('appointments').insert({
+        client_id:form.clientId||null,client_name:form.clientName,service:form.service,
+        date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,
+        color:form.color,notes:form.notes,status:form.status||'confirmado'
+      });
+    }
+    await reload();setShowModal(false);
+  };
+
+  const delAppt=async(id)=>{
+    await supabase.from('appointments').delete().eq('id',id);
+    await reload();setSelAppt(null);setShowModal(false);
+  };
+
+  const completeAppt=async(id)=>{
+    await supabase.from('appointments').update({status:'completado'}).eq('id',id);
+    await reload();setSelAppt(null);
+  };
+
   const titleStr=viewMode==="week"?`${MONTHS[weekDates[0].getMonth()]} ${weekDates[0].getFullYear()}`:`${DAYS_FULL[curDate.getDay()]} ${curDate.getDate()} de ${MONTHS[curDate.getMonth()]}`;
   const todayAppts=appointments.filter(a=>a.date===todayStr()).sort((a,b)=>a.hour-b.hour);
-  const upcoming=appointments.filter(a=>a.date>=todayStr()&&a.status!=="cancelado").sort((a,b)=>a.date.localeCompare(b.date)||a.hour-b.hour);
+  const upcoming=appointments.filter(a=>a.date>=todayStr()&&a.status!=="cancelado").sort((a,b)=>a.date?.localeCompare(b.date)||a.hour-b.hour);
 
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
-      {/* Top bar */}
       <div style={{background:"#fff",borderBottom:"1px solid #e8e4dc",padding:"12px 20px",display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
         <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:20,letterSpacing:"-0.02em"}}>📅 Agenda</div>
         <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:12}}>
@@ -490,13 +576,12 @@ function Agenda({appointments,setAppointments,clients,config}){
       </div>
 
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>
-        {/* WEEK VIEW */}
         {viewMode==="week"&&(
           <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
             <div style={{display:"grid",gridTemplateColumns:"52px repeat(7,1fr)",background:"#fff",borderBottom:"1.5px solid #e8e4dc",flexShrink:0,position:"sticky",top:0,zIndex:10}}>
               <div/>
               {weekDates.map((d,i)=>{const isT=isSameDay(d,todayDate());const cnt=apptsByDate(d).length;return(
-                <div key={i} onClick={()=>{setCurDate(d);setViewMode("day");}} style={{padding:"9px 6px",textAlign:"center",cursor:"pointer",borderLeft:"1px solid #f0ede6",background:isT?"#fafafe":"transparent",transition:"background .12s"}}>
+                <div key={i} onClick={()=>{setCurDate(d);setViewMode("day");}} style={{padding:"9px 6px",textAlign:"center",cursor:"pointer",borderLeft:"1px solid #f0ede6",background:isT?"#fafafe":"transparent"}}>
                   <div style={{fontSize:10,fontWeight:600,color:"#aaa",textTransform:"uppercase"}}>{DAYS[d.getDay()]}</div>
                   <div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:19,color:isT?"#6366f1":"#18181b",marginTop:1}}>{d.getDate()}</div>
                   {cnt>0&&<div style={{fontSize:10,color:isT?"#6366f1":"#aaa",fontWeight:600}}>{cnt}t</div>}
@@ -511,12 +596,12 @@ function Agenda({appointments,setAppointments,clients,config}){
                   <div key={di} style={{borderLeft:"1px solid #f0ede6",position:"relative",background:isT?"#fafafe":"transparent"}}>
                     {HOURS.map(h=><div key={h} className="hour-cell" style={{height:56,cursor:"pointer"}} onClick={()=>openNew(dateKey(d),h)} onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.04)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>)}
                     {apptsByDate(d).map(a=>{
-                      const top=((a.hour-8)*60+a.minute)*56/60;
+                      const top=((a.hour-8)*60+(a.minute||0))*56/60;
                       const ht=Math.max(a.duration*56/60-3,20);
                       const isCan=a.status==="cancelado";
                       return<div key={a.id} className="appt-block" style={{top,left:3,right:3,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
-                        <div style={{fontSize:10,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute)}</div>
-                        <div style={{fontSize:11,fontWeight:600,color:"#18181b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.clientName}</div>
+                        <div style={{fontSize:10,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div>
+                        <div style={{fontSize:11,fontWeight:600,color:"#18181b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div>
                         {ht>38&&<div style={{fontSize:10,color:"#666",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.service}</div>}
                       </div>;
                     })}
@@ -528,7 +613,6 @@ function Agenda({appointments,setAppointments,clients,config}){
           </div>
         )}
 
-        {/* DAY VIEW */}
         {viewMode==="day"&&(
           <div style={{flex:1,overflow:"auto"}}>
             <div style={{display:"grid",gridTemplateColumns:"52px 1fr"}}>
@@ -536,12 +620,12 @@ function Agenda({appointments,setAppointments,clients,config}){
               <div style={{position:"relative",borderLeft:"1px solid #f0ede6"}}>
                 {HOURS.map(h=><div key={h} className="hour-cell" style={{height:70,cursor:"pointer"}} onClick={()=>openNew(dateKey(curDate),h)} onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.04)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>)}
                 {apptsByDate(curDate).map(a=>{
-                  const top=((a.hour-8)*60+a.minute)*70/60;
+                  const top=((a.hour-8)*60+(a.minute||0))*70/60;
                   const ht=Math.max(a.duration*70/60-4,30);
                   const isCan=a.status==="cancelado";
                   return<div key={a.id} className="appt-block" style={{top,left:8,right:8,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:12,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute)}</div><span style={{fontSize:10.5,fontWeight:700,padding:"1px 7px",borderRadius:10,background:STATUS_STYLES[a.status]?.bg,color:STATUS_STYLES[a.status]?.text}}>{STATUS_STYLES[a.status]?.label}</span></div>
-                    <div style={{fontSize:14,fontWeight:700,color:"#18181b",marginTop:2}}>{a.clientName}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:12,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div><span style={{fontSize:10.5,fontWeight:700,padding:"1px 7px",borderRadius:10,background:STATUS_STYLES[a.status]?.bg,color:STATUS_STYLES[a.status]?.text}}>{STATUS_STYLES[a.status]?.label}</span></div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#18181b",marginTop:2}}>{a.client_name||a.clientName}</div>
                     {ht>45&&<div style={{fontSize:12,color:"#666",marginTop:1}}>{a.service}</div>}
                   </div>;
                 })}
@@ -551,7 +635,6 @@ function Agenda({appointments,setAppointments,clients,config}){
           </div>
         )}
 
-        {/* LIST VIEW */}
         {viewMode==="list"&&(
           <div style={{flex:1,overflow:"auto",padding:20}}>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
@@ -569,19 +652,9 @@ function Agenda({appointments,setAppointments,clients,config}){
           </div>
         )}
 
-        {/* Sidebar */}
         <div style={{width:200,background:"#fff",borderLeft:"1px solid #e8e4dc",padding:16,flexShrink:0,overflow:"auto"}}>
           <MiniCal curDate={curDate} setCurDate={(d)=>{setCurDate(d);setViewMode("day");}} appointments={appointments}/>
           <div style={{marginTop:18}}>
-            <div className="sec">Esta semana</div>
-            {weekDates.map((d,i)=>{const cnt=apptsByDate(d).length;const isT=isSameDay(d,todayDate());return(
-              <div key={i} onClick={()=>{setCurDate(d);setViewMode("day");}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 8px",borderRadius:8,cursor:"pointer",background:isT?"#f0f0ff":"transparent",marginBottom:2}} onMouseEnter={e=>e.currentTarget.style.background=isT?"#e8e8ff":"#f8f7f4"} onMouseLeave={e=>e.currentTarget.style.background=isT?"#f0f0ff":"transparent"}>
-                <span style={{fontSize:12.5,color:isT?"#6366f1":"#555",fontWeight:isT?700:400}}>{DAYS[d.getDay()]} {d.getDate()}</span>
-                {cnt>0?<span style={{fontSize:11,fontWeight:700,background:"#e0e7ff",color:"#3730a3",borderRadius:10,padding:"1px 6px"}}>{cnt}</span>:<span style={{fontSize:11,color:"#ccc"}}>—</span>}
-              </div>
-            );})}
-          </div>
-          <div style={{marginTop:16}}>
             <div className="sec">Stats</div>
             {[["Hoy",todayAppts.length,"#6366f1"],["Pendientes",appointments.filter(a=>a.status==="pendiente").length,"#d97706"],["Cancelados",appointments.filter(a=>a.status==="cancelado").length,"#ef4444"]].map(([l,v,c])=>(
               <div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f5f3ef"}}>
@@ -593,19 +666,18 @@ function Agenda({appointments,setAppointments,clients,config}){
         </div>
       </div>
 
-      {/* Detail modal */}
       {selAppt&&<div className="modal-bg" onClick={()=>setSelAppt(null)}><div className="modal" style={{maxWidth:370}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
           <div style={{width:12,height:12,borderRadius:3,background:selAppt.color,flexShrink:0}}/>
-          <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,flex:1}}>{selAppt.clientName}</div>
+          <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,flex:1}}>{selAppt.client_name||selAppt.clientName}</div>
           <span style={{fontSize:10.5,fontWeight:700,padding:"2px 8px",borderRadius:10,background:STATUS_STYLES[selAppt.status]?.bg,color:STATUS_STYLES[selAppt.status]?.text}}>{STATUS_STYLES[selAppt.status]?.label}</span>
         </div>
-        {[["📅","Fecha",`${selAppt.date.split("-").reverse().join("/")} — ${DAYS_FULL[new Date(selAppt.date+"T12:00").getDay()]}`],["🕐","Horario",`${fmtHour(selAppt.hour,selAppt.minute)} (${selAppt.duration} min)`],["✂️","Servicio",selAppt.service||"—"],["📝","Notas",selAppt.notes||"—"]].map(([ic,l,v])=>(
+        {[["📅","Fecha",`${selAppt.date?.split("-").reverse().join("/")} — ${DAYS_FULL[new Date(selAppt.date+"T12:00").getDay()]}`],["🕐","Horario",`${fmtHour(selAppt.hour,selAppt.minute||0)} (${selAppt.duration} min)`],["✂️","Servicio",selAppt.service||"—"],["📝","Notas",selAppt.notes||"—"]].map(([ic,l,v])=>(
           <div key={l} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:"1px solid #f5f3ef"}}><span style={{fontSize:15,flexShrink:0}}>{ic}</span><div><div style={{fontSize:10.5,color:"#aaa",fontWeight:600,textTransform:"uppercase"}}>{l}</div><div style={{fontSize:13.5,marginTop:1}}>{v}</div></div></div>
         ))}
         <div style={{display:"flex",gap:8,marginTop:14}}>
           <button className="btn btn-outline" style={{flex:1}} onClick={()=>openEdit(selAppt)}>✏️ Editar</button>
-          <button className="btn btn-dark" style={{flex:1}} onClick={()=>{setAppointments(p=>p.map(a=>a.id===selAppt.id?{...a,status:"completado"}:a));setSelAppt(null);}}>✓ Completar</button>
+          <button className="btn btn-dark" style={{flex:1}} onClick={()=>completeAppt(selAppt.id)}>✓ Completar</button>
           <button className="btn btn-outline" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={()=>delAppt(selAppt.id)}>🗑</button>
         </div>
       </div></div>}
@@ -619,7 +691,7 @@ function ApptRow({a,showDate=false,onClick}){
   const st=STATUS_STYLES[a.status];
   return<div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 10px",borderRadius:9,cursor:"pointer",border:"1.5px solid transparent",marginBottom:5,transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#f8f7f4";e.currentTarget.style.borderColor="#e2dfd8";}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent";}}>
     <div style={{width:4,height:32,borderRadius:2,background:a.color,flexShrink:0}}/>
-    <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.clientName}</div><div style={{fontSize:11,color:"#888"}}>{showDate?`${a.date.split("-").reverse().join("/")} · `:""}{fmtHour(a.hour,a.minute)} · {a.service}</div></div>
+    <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div><div style={{fontSize:11,color:"#888"}}>{showDate?`${a.date?.split("-").reverse().join("/")} · `:""}{fmtHour(a.hour,a.minute||0)} · {a.service}</div></div>
     <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:10,background:st?.bg,color:st?.text,flexShrink:0}}>{st?.label}</span>
   </div>;
 }
@@ -648,7 +720,7 @@ function MiniCal({curDate,setCurDate,appointments}){
 }
 
 function ApptModal({appt,clients,services,defaultDate,defaultHour,onSave,onDelete,onClose}){
-  const [form,setForm]=useState(appt?{...appt}:{clientId:clients[0]?.id||"",clientName:clients[0]?.name||"",service:services[0]||"",date:defaultDate,hour:defaultHour,minute:0,duration:60,color:APPT_COLORS[0].value,notes:"",status:"confirmado"});
+  const [form,setForm]=useState(appt?{...appt,clientId:appt.client_id,clientName:appt.client_name}:{clientId:"",clientName:"",service:services[0]||"",date:defaultDate,hour:defaultHour,minute:0,duration:60,color:APPT_COLORS[0].value,notes:"",status:"confirmado"});
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const handleClient=(id)=>{const c=clients.find(c=>String(c.id)===String(id));set("clientId",id);set("clientName",c?c.name:"Sin cliente");};
   return<div className="modal-bg" onClick={onClose}><div className="modal" onClick={e=>e.stopPropagation()}>
@@ -680,7 +752,7 @@ function ApptModal({appt,clients,services,defaultDate,defaultHour,onSave,onDelet
 // ══════════════════════════════════════════════════════════════════
 // STOCK
 // ══════════════════════════════════════════════════════════════════
-function Stock({products,setProducts,lowStock,fmt}){
+function Stock({products,setProducts,lowStock,fmt,reload}){
   const [showNew,setShowNew]=useState(false);
   const [showAdj,setShowAdj]=useState(null);
   const [search,setSearch]=useState("");
@@ -688,11 +760,27 @@ function Stock({products,setProducts,lowStock,fmt}){
   const [newP,setNewP]=useState({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});
   const [adjQty,setAdjQty]=useState("");
   const [adjType,setAdjType]=useState("add");
+  const [saving,setSaving]=useState(false);
+
   const cats=["Todos",...Array.from(new Set(products.map(p=>p.category).filter(Boolean)))];
-  const filtered=products.filter(p=>(p.name.toLowerCase().includes(search.toLowerCase())||p.sku.toLowerCase().includes(search.toLowerCase()))&&(filterCat==="Todos"||p.category===filterCat));
-  const addP=()=>{if(!newP.name||!newP.price)return;setProducts(p=>[...p,{id:mkId(),...newP,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,minStock:Number(newP.minStock)||5}]);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);};
-  const applyAdj=()=>{const q=Number(adjQty);if(!q||!showAdj)return;setProducts(p=>p.map(x=>x.id===showAdj.id?{...x,stock:Math.max(0,adjType==="add"?x.stock+q:x.stock-q)}:x));setShowAdj(null);setAdjQty("");setAdjType("add");};
-  const st=(p)=>p.stock===0?{label:"Sin stock",cls:"pill-red"}:p.stock<=p.minStock?{label:"Stock bajo",cls:"pill-yellow"}:{label:"OK",cls:"pill-green"};
+  const filtered=products.filter(p=>(p.name.toLowerCase().includes(search.toLowerCase())||( p.sku||"").toLowerCase().includes(search.toLowerCase()))&&(filterCat==="Todos"||p.category===filterCat));
+
+  const addP=async()=>{
+    if(!newP.name||!newP.price)return;
+    setSaving(true);
+    await supabase.from('products').insert({name:newP.name,sku:newP.sku,category:newP.category,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,min_stock:Number(newP.minStock)||5});
+    await reload();setSaving(false);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);
+  };
+
+  const applyAdj=async()=>{
+    const q=Number(adjQty);if(!q||!showAdj)return;
+    const newStock=Math.max(0,adjType==="add"?showAdj.stock+q:showAdj.stock-q);
+    await supabase.from('products').update({stock:newStock}).eq('id',showAdj.id);
+    await reload();setShowAdj(null);setAdjQty("");setAdjType("add");
+  };
+
+  const st=(p)=>p.stock===0?{label:"Sin stock",cls:"pill-red"}:p.stock<=p.min_stock?{label:"Stock bajo",cls:"pill-yellow"}:{label:"OK",cls:"pill-green"};
+
   return(
     <div style={{padding:24}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
@@ -702,7 +790,7 @@ function Stock({products,setProducts,lowStock,fmt}){
       </div>
       {lowStock.length>0&&<div className="alert-banner"><span>⚠️</span><span style={{fontWeight:700,fontSize:13}}>{lowStock.length} producto{lowStock.length>1?"s":""} con stock bajo</span></div>}
       <div style={{display:"flex",gap:12,marginBottom:18}}>
-        {[{l:"Productos",v:products.length},{l:"Stock bajo",v:lowStock.length,red:true},{l:"Valor costo",v:fmt(products.reduce((a,p)=>a+p.stock*p.cost,0))},{l:"Valor venta",v:fmt(products.reduce((a,p)=>a+p.stock*p.price,0))}].map((s,i)=>(
+        {[{l:"Productos",v:products.length},{l:"Stock bajo",v:lowStock.length,red:true},{l:"Valor costo",v:fmt(products.reduce((a,p)=>a+p.stock*(p.cost||0),0))},{l:"Valor venta",v:fmt(products.reduce((a,p)=>a+p.stock*(p.price||0),0))}].map((s,i)=>(
           <div key={i} className="stat"><div style={{fontSize:10,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em"}}>{s.l}</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,color:s.red&&s.v>0?"#7f1d1d":"#18181b",marginTop:2}}>{s.v}</div></div>
         ))}
       </div>
@@ -714,15 +802,15 @@ function Stock({products,setProducts,lowStock,fmt}){
             <td style={{padding:"10px 13px",fontWeight:600,fontSize:13.5}}>{p.name}</td>
             <td style={{padding:"10px 13px",fontSize:12,color:"#888",fontFamily:"monospace"}}>{p.sku||"—"}</td>
             <td style={{padding:"10px 13px",fontSize:12,color:"#555"}}>{p.category||"—"}</td>
-            <td style={{padding:"10px 13px",fontWeight:600,fontSize:13.5}}>{fmt(p.price)}</td>
+            <td style={{padding:"10px 13px",fontWeight:600,fontSize:13.5}}>{fmt(p.price||0)}</td>
             <td style={{padding:"10px 13px",fontSize:12,color:"#888"}}>{p.cost?fmt(p.cost):"—"}</td>
-            <td style={{padding:"10px 13px",fontWeight:700,fontSize:14,color:p.stock===0?"#7f1d1d":p.stock<=p.minStock?"#854d0e":"#18181b"}}>{p.stock}</td>
-            <td style={{padding:"10px 13px",fontSize:12,color:"#888"}}>{p.minStock}</td>
+            <td style={{padding:"10px 13px",fontWeight:700,fontSize:14,color:p.stock===0?"#7f1d1d":p.stock<=p.min_stock?"#854d0e":"#18181b"}}>{p.stock}</td>
+            <td style={{padding:"10px 13px",fontSize:12,color:"#888"}}>{p.min_stock}</td>
             <td style={{padding:"10px 13px"}}><span className={`pill ${s.cls}`}>{s.label}</span></td>
             <td style={{padding:"10px 13px"}}><button className="btn btn-outline btn-sm" onClick={()=>setShowAdj(p)}>Ajustar</button></td>
           </tr>;})}</tbody>
         </table>
-        {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin productos</div>}
+        {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin productos. ¡Agregá el primero!</div>}
       </div>
       {showNew&&<div className="modal-bg" onClick={()=>setShowNew(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:16}}>Nuevo producto</div>
@@ -735,7 +823,7 @@ function Stock({products,setProducts,lowStock,fmt}){
           <input className="field" placeholder="Stock inicial" type="number" value={newP.stock} onChange={e=>setNewP(p=>({...p,stock:e.target.value}))}/>
           <input className="field" placeholder="Stock mínimo" type="number" value={newP.minStock} onChange={e=>setNewP(p=>({...p,minStock:e.target.value}))}/>
         </div>
-        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className="btn btn-dark" onClick={addP}>Agregar</button></div>
+        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className="btn btn-dark" onClick={addP} disabled={saving}>{saving?"Guardando...":"Agregar"}</button></div>
       </div></div>}
       {showAdj&&<div className="modal-bg" onClick={()=>setShowAdj(null)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:320}}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:6}}>Ajustar stock</div>
@@ -752,16 +840,31 @@ function Stock({products,setProducts,lowStock,fmt}){
 // ══════════════════════════════════════════════════════════════════
 // CAJA
 // ══════════════════════════════════════════════════════════════════
-function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,config,fmt}){
+function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,config,fmt,reload}){
   const [showNew,setShowNew]=useState(false);
   const [filterType,setFilterType]=useState("todos");
   const [filterCat,setFilterCat]=useState("Todos");
   const [newM,setNewM]=useState({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});
+  const [saving,setSaving]=useState(false);
+
   const allCats=["Todos",...config.catIngreso,...config.catEgreso];
-  const filtered=[...movements].sort((a,b)=>b.date.localeCompare(a.date)).filter(m=>(filterType==="todos"||m.type===filterType)&&(filterCat==="Todos"||m.category===filterCat));
-  const addM=()=>{if(!newM.description||!newM.amount||!newM.date)return;setMovements(p=>[{id:mkId(),...newM,amount:Number(newM.amount),clientId:newM.clientId?Number(newM.clientId):null},...p]);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);};
-  const byMonth=filtered.reduce((acc,m)=>{const k=m.date.slice(0,7);if(!acc[k])acc[k]={label:k,ing:0,eg:0};if(m.type==="ingreso")acc[k].ing+=m.amount;else acc[k].eg+=m.amount;return acc;},{});
+  const filtered=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).filter(m=>(filterType==="todos"||m.type===filterType)&&(filterCat==="Todos"||m.category===filterCat));
+
+  const addM=async()=>{
+    if(!newM.description||!newM.amount||!newM.date)return;
+    setSaving(true);
+    await supabase.from('movements').insert({type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});
+    await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);
+  };
+
+  const deleteM=async(id)=>{
+    await supabase.from('movements').delete().eq('id',id);
+    await reload();
+  };
+
+  const byMonth=filtered.reduce((acc,m)=>{const k=(m.date||"").slice(0,7);if(!acc[k])acc[k]={label:k,ing:0,eg:0};if(m.type==="ingreso")acc[k].ing+=Number(m.amount);else acc[k].eg+=Number(m.amount);return acc;},{});
   const months=Object.values(byMonth).sort((a,b)=>b.label.localeCompare(a.label));
+
   return(
     <div style={{padding:24}}>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:18}}>
@@ -790,11 +893,11 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
         {allCats.map(c=><button key={c} onClick={()=>setFilterCat(c)} style={{padding:"4px 12px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,border:"1.5px solid",borderColor:filterCat===c?"#555":"#e2dfd8",background:filterCat===c?"#555":"#fff",color:filterCat===c?"#fff":"#555",fontFamily:"inherit",transition:"all .12s"}}>{c}</button>)}
       </div>
       <div className="card" style={{padding:6}}>
-        {filtered.map(m=>{const cl=m.clientId?clients.find(c=>c.id===m.clientId):null;return<div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 13px",borderBottom:"1px solid #f5f3ef"}}>
+        {filtered.map(m=>{const cl=m.client_id?clients.find(c=>c.id===m.client_id):null;return<div key={m.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 13px",borderBottom:"1px solid #f5f3ef"}}>
           <div style={{width:34,height:34,borderRadius:"50%",background:m.type==="ingreso"?"#dcfce7":"#fee2e2",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{m.type==="ingreso"?"↑":"↓"}</div>
           <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13.5}}>{m.description}</div><div style={{fontSize:11.5,color:"#aaa",marginTop:1}}>{fmtDate(m.date)} · {m.category}{cl?` · ${cl.name}`:""}</div></div>
           <div style={{fontWeight:700,fontSize:14,color:m.type==="ingreso"?"#166534":"#7f1d1d",flexShrink:0}}>{m.type==="ingreso"?"+":"-"}{fmt(m.amount)}</div>
-          <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={()=>setMovements(p=>p.filter(x=>x.id!==m.id))}>✕</button>
+          <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={()=>deleteM(m.id)}>✕</button>
         </div>;})}
         {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin movimientos</div>}
       </div>
@@ -808,7 +911,7 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
           <input className="field" type="date" value={newM.date} onChange={e=>setNewM(p=>({...p,date:e.target.value}))}/>
           {newM.type==="ingreso"&&<select className="field" value={newM.clientId} onChange={e=>setNewM(p=>({...p,clientId:e.target.value}))}><option value="">— Cliente (opcional) —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>}
         </div>
-        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className={`btn ${newM.type==="ingreso"?"btn-green":"btn-red"}`} onClick={addM}>Registrar</button></div>
+        <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className={`btn ${newM.type==="ingreso"?"btn-green":"btn-red"}`} onClick={addM} disabled={saving}>{saving?"Guardando...":"Registrar"}</button></div>
       </div></div>}
     </div>
   );
@@ -817,10 +920,9 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
 // ══════════════════════════════════════════════════════════════════
 // CONFIG
 // ══════════════════════════════════════════════════════════════════
-function Config({config,setConfig,setClients,setProducts,setMovements,setAppointments}){
+function Config({config,setConfig,reload}){
   const [draft,setDraft]=useState({...config});
   const [saved,setSaved]=useState(false);
-  const [showReset,setShowReset]=useState(false);
   const [newTag,setNewTag]=useState("");
   const [newCI,setNewCI]=useState("");
   const [newCE,setNewCE]=useState("");
@@ -863,9 +965,8 @@ function Config({config,setConfig,setClients,setProducts,setMovements,setAppoint
         </div>
       ))}
 
-      {/* Preview */}
       <div className="settings-section" style={{background:"#f0f0f0"}}>
-        <div className="sec">Vista previa del sidebar</div>
+        <div className="sec">Vista previa</div>
         <div style={{display:"flex",alignItems:"center",gap:10,background:"#fff",padding:"12px 16px",borderRadius:11,border:"1.5px solid #e2dfd8"}}>
           <div style={{width:36,height:36,background:draft.accentColor,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>{draft.appIcon}</div>
           <div><div style={{fontFamily:"'Syne',sans-serif",fontWeight:800,fontSize:16,color:"#18181b"}}>{draft.appName||"Sin nombre"}</div><div style={{fontSize:11,color:"#aaa"}}>gestión integral</div></div>
@@ -875,14 +976,7 @@ function Config({config,setConfig,setClients,setProducts,setMovements,setAppoint
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <button className="btn btn-dark" onClick={save} style={{padding:"10px 26px",fontSize:13.5}}>{saved?"✓ Guardado":"Guardar cambios"}</button>
         {saved&&<span style={{fontSize:13,color:"#166534",fontWeight:600}}>¡Aplicado!</span>}
-        <button className="btn btn-outline" style={{marginLeft:"auto",color:"#7f1d1d",borderColor:"#fca5a5"}} onClick={()=>setShowReset(true)}>🗑 Borrar todos los datos</button>
       </div>
-
-      {showReset&&<div className="modal-bg" onClick={()=>setShowReset(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:10}}>⚠️ Borrar todos los datos</div>
-        <div style={{fontSize:13.5,color:"#555",marginBottom:18,lineHeight:1.6}}>Esto eliminará <strong>todos los clientes, productos, movimientos y turnos</strong>. La configuración se mantiene. No se puede deshacer.</div>
-        <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowReset(false)}>Cancelar</button><button className="btn btn-red" onClick={()=>{setClients([]);setProducts([]);setMovements([]);setAppointments([]);setShowReset(false);}}>Sí, borrar todo</button></div>
-      </div></div>}
     </div>
   );
 }

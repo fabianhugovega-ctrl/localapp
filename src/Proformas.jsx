@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Barcode from "react-barcode";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { supabase } from "./supabase.js";
 
 // ─── HELPERS ────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
@@ -37,21 +38,48 @@ const G = `
 export default function Proformas({ clients = [], products = [], config = {} }) {
   const fmt = (n) => `${config.moneda || "$"}${Number(n).toLocaleString("es-AR")}`;
   const [proformas, setProformas] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
   const [showDetail, setShowDetail] = useState(null);
   const [showBarcodes, setShowBarcodes] = useState(false);
 
-  const addProforma = (p) => {
-    setProformas(prev => [{ ...p, id: Date.now(), nro: nroProforma(), fecha: todayStr(), estado: "borrador" }, ...prev]);
+  useEffect(() => { loadProformas(); }, []);
+
+  const loadProformas = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("proformas")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (!error) setProformas(data || []);
+    setLoading(false);
+  };
+
+  const addProforma = async (p) => {
+    const { error } = await supabase.from("proformas").insert({
+      nro: nroProforma(),
+      fecha: todayStr(),
+      vencimiento: p.vencimiento || null,
+      client_id: p.clientId || null,
+      client_name: p.clientName || null,
+      items: p.items,
+      total: p.total,
+      nota: p.nota || null,
+      estado: "borrador",
+    });
+    if (!error) await loadProformas();
     setShowNew(false);
   };
 
-  const changeEstado = (id, estado) => {
-    setProformas(prev => prev.map(p => p.id === id ? { ...p, estado } : p));
+  const changeEstado = async (id, estado) => {
+    await supabase.from("proformas").update({ estado }).eq("id", id);
+    await loadProformas();
+    if (showDetail?.id === id) setShowDetail(prev => ({ ...prev, estado }));
   };
 
-  const deleteProforma = (id) => {
-    setProformas(prev => prev.filter(p => p.id !== id));
+  const deleteProforma = async (id) => {
+    await supabase.from("proformas").delete().eq("id", id);
+    await loadProformas();
     setShowDetail(null);
   };
 
@@ -62,7 +90,7 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
     rechazado: { bg:"#fee2e2", text:"#7f1d1d", label:"Rechazado" },
   };
 
-  const totalProformas = proformas.reduce((a, p) => a + p.total, 0);
+  const totalProformas = proformas.reduce((a, p) => a + Number(p.total), 0);
   const aceptadas = proformas.filter(p => p.estado === "aceptado").length;
 
   return (
@@ -90,7 +118,7 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
           { label:"Total proformas", value: proformas.length },
           { label:"Aceptadas", value: aceptadas, color:"#166534" },
           { label:"Valor total", value: fmt(totalProformas) },
-          { label:"Valor aceptado", value: fmt(proformas.filter(p=>p.estado==="aceptado").reduce((a,p)=>a+p.total,0)), color:"#166534" },
+          { label:"Valor aceptado", value: fmt(proformas.filter(p=>p.estado==="aceptado").reduce((a,p)=>a+Number(p.total),0)), color:"#166534" },
         ].map((s,i) => (
           <div key={i} className="stat">
             <div style={{ fontSize:10, color:"#aaa", fontWeight:700, textTransform:"uppercase", letterSpacing:".07em" }}>{s.label}</div>
@@ -101,7 +129,9 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
 
       {/* Lista */}
       <div className="card" style={{ overflow:"hidden" }}>
-        {proformas.length === 0 ? (
+        {loading ? (
+          <div style={{ textAlign:"center", padding:48, color:"#aaa" }}>Cargando...</div>
+        ) : proformas.length === 0 ? (
           <div style={{ textAlign:"center", padding:48, color:"#aaa" }}>
             <div style={{ fontSize:32, marginBottom:12 }}>🧾</div>
             <div style={{ fontSize:15, fontWeight:600, marginBottom:6 }}>Sin proformas todavía</div>
@@ -123,8 +153,8 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
                   <tr key={p.id} style={{ cursor:"pointer" }} onClick={() => setShowDetail(p)}>
                     <td style={{ fontWeight:700, fontFamily:"monospace", fontSize:13 }}>{p.nro}</td>
                     <td style={{ color:"#555" }}>{fmtDate(p.fecha)}</td>
-                    <td style={{ fontWeight:600 }}>{p.clientName || "Sin cliente"}</td>
-                    <td style={{ color:"#888" }}>{p.items.length} ítem{p.items.length !== 1 ? "s" : ""}</td>
+                    <td style={{ fontWeight:600 }}>{p.client_name || "Sin cliente"}</td>
+                    <td style={{ color:"#888" }}>{(p.items||[]).length} ítem{(p.items||[]).length !== 1 ? "s" : ""}</td>
                     <td style={{ fontWeight:700, color:"#18181b" }}>{fmt(p.total)}</td>
                     <td>
                       <span style={{ background:st.bg, color:st.text, padding:"3px 10px", borderRadius:20, fontSize:11, fontWeight:700 }}>
@@ -144,7 +174,6 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
         )}
       </div>
 
-      {/* Modal nueva proforma */}
       {showNew && (
         <NuevaProformaModal
           clients={clients}
@@ -156,20 +185,18 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
         />
       )}
 
-      {/* Modal detalle */}
       {showDetail && (
         <DetalleProformaModal
           proforma={showDetail}
           config={config}
           fmt={fmt}
           estadoStyle={estadoStyle}
-          onChangeEstado={(estado) => { changeEstado(showDetail.id, estado); setShowDetail({ ...showDetail, estado }); }}
+          onChangeEstado={(estado) => changeEstado(showDetail.id, estado)}
           onDelete={() => deleteProforma(showDetail.id)}
           onClose={() => setShowDetail(null)}
         />
       )}
 
-      {/* Modal códigos de barra */}
       {showBarcodes && (
         <BarcodesModal products={products} onClose={() => setShowBarcodes(false)} />
       )}
@@ -282,7 +309,6 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
     const appName = config.appName || "LocalApp";
     const moneda = config.moneda || "$";
 
-    // Header
     doc.setFontSize(22);
     doc.setFont("helvetica", "bold");
     doc.text(appName, 20, 25);
@@ -304,23 +330,20 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
       doc.text(`Vence: ${fmtDate(proforma.vencimiento)}`, 150, 38);
     }
 
-    // Línea separadora
     doc.setDrawColor(200);
     doc.line(20, 42, 190, 42);
 
-    // Cliente
     doc.setTextColor(0);
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
     doc.text("CLIENTE:", 20, 52);
     doc.setFont("helvetica", "normal");
-    doc.text(proforma.clientName || "Sin especificar", 20, 59);
+    doc.text(proforma.client_name || "Sin especificar", 20, 59);
 
-    // Tabla de items
     autoTable(doc, {
       startY: 68,
       head: [["Descripción", "Cant.", `Precio unit. (${moneda})`, `Total (${moneda})`]],
-      body: proforma.items.map(it => [
+      body: (proforma.items || []).map(it => [
         it.desc,
         it.qty,
         Number(it.price).toLocaleString("es-AR"),
@@ -328,14 +351,13 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
       ]),
       foot: [[
         { content: "TOTAL", colSpan: 3, styles: { halign: "right", fontStyle: "bold" } },
-        { content: `${moneda}${proforma.total.toLocaleString("es-AR")}`, styles: { fontStyle: "bold" } }
+        { content: `${moneda}${Number(proforma.total).toLocaleString("es-AR")}`, styles: { fontStyle: "bold" } }
       ]],
       styles: { fontSize: 10 },
       headStyles: { fillColor: [24, 24, 27], textColor: 255 },
       footStyles: { fillColor: [240, 253, 244], textColor: [22, 101, 52] },
     });
 
-    // Nota
     if (proforma.nota) {
       const finalY = doc.lastAutoTable.finalY + 10;
       doc.setFontSize(9);
@@ -345,12 +367,11 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
       doc.text(proforma.nota, 20, finalY + 6, { maxWidth: 170 });
     }
 
-    // Footer
     doc.setFontSize(8);
     doc.setTextColor(160);
     doc.text(`Generado por ${appName} · ${fmtDate(proforma.fecha)}`, 20, 285);
 
-    doc.save(`${proforma.nro}-${proforma.clientName || "proforma"}.pdf`);
+    doc.save(`${proforma.nro}-${proforma.client_name || "proforma"}.pdf`);
   };
 
   const compartirWhatsApp = () => {
@@ -362,7 +383,6 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" style={{ maxWidth:560 }} onClick={e => e.stopPropagation()}>
-        {/* Header */}
         <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:16 }}>
           <div>
             <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:800 }}>{proforma.nro}</div>
@@ -376,13 +396,11 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
           </span>
         </div>
 
-        {/* Cliente */}
         <div style={{ background:"#f8f7f4", borderRadius:10, padding:"10px 14px", marginBottom:14 }}>
           <div style={{ fontSize:11, color:"#aaa", fontWeight:600, textTransform:"uppercase", letterSpacing:".06em", marginBottom:3 }}>Cliente</div>
-          <div style={{ fontWeight:600, fontSize:15 }}>{proforma.clientName || "Sin especificar"}</div>
+          <div style={{ fontWeight:600, fontSize:15 }}>{proforma.client_name || "Sin especificar"}</div>
         </div>
 
-        {/* Items */}
         <table className="proforma-table" style={{ marginBottom:12 }}>
           <thead>
             <tr>
@@ -393,7 +411,7 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
             </tr>
           </thead>
           <tbody>
-            {proforma.items.map((it, i) => (
+            {(proforma.items || []).map((it, i) => (
               <tr key={i}>
                 <td>{it.desc}</td>
                 <td>{it.qty}</td>
@@ -404,20 +422,17 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
           </tbody>
         </table>
 
-        {/* Total */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#f0fdf4", border:"1.5px solid #86efac", borderRadius:10, padding:"12px 16px", marginBottom:14 }}>
           <span style={{ fontWeight:600, color:"#166534" }}>Total</span>
           <span style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:800, color:"#166534" }}>{fmt(proforma.total)}</span>
         </div>
 
-        {/* Nota */}
         {proforma.nota && (
           <div style={{ fontSize:12, color:"#666", background:"#fafaf8", borderRadius:8, padding:"8px 12px", marginBottom:14, fontStyle:"italic" }}>
             {proforma.nota}
           </div>
         )}
 
-        {/* Estado */}
         <div style={{ marginBottom:14 }}>
           <div className="sec">Cambiar estado</div>
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -433,7 +448,6 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
           </div>
         </div>
 
-        {/* Acciones */}
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
           <button className="btn btn-dark" onClick={generarPDF} style={{ flex:1 }}>
             📄 Descargar PDF

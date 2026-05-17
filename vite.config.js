@@ -5,16 +5,6 @@ export default defineConfig({
   plugins: [react()],
   build: {
     chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          charts: ['recharts'],
-          pdf: ['jspdf', 'jspdf-autotable'],
-          barcode: ['react-barcode'],
-          supabase: ['@supabase/supabase-js'],
-        }
-      }
-    }
   }
 })
+

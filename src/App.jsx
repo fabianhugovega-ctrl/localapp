@@ -251,6 +251,7 @@ export default function App() {
 // DASHBOARD
 // ══════════════════════════════════════════════════════════════════
 function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,totalEgresos,lowStock,setTab,fmt,config,tColor}){
+  const isMobile = window.innerWidth < 768;
   const recentMovs=[...movements].sort((a,b)=>b.date?.localeCompare(a.date)).slice(0,5);
   const topClients=[...clients].sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,4);
   const todayAppts=appointments.filter(a=>a.date===todayStr()).sort((a,b)=>a.hour-b.hour);
@@ -275,7 +276,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
         ].map((s,i)=>(
           <div key={i} className="stat" style={{textAlign:"center"}}>
             <div style={{fontSize:10,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em"}}>{s.label}</div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:isMobile?16:24,fontWeight:800,color:s.color,fontSize:isMobile?16:24,marginTop:2}}>{s.value}</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:isMobile?16:24,fontWeight:800,color:s.color,marginTop:2}}>{s.value}</div>
           </div>
         ))}
       </div>

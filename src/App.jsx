@@ -242,7 +242,7 @@ export default function App() {
       {/* NAV MOBILE — barra inferior */}
       {isMobile && (
         <div className="mobile-nav">
-          {NAV.map(({key,icon,label,badge})=>(
+          {[...NAV].slice(0,5).map(({key,icon,label,badge})=>(
             <button key={key} className="mobile-nav-btn" onClick={()=>changeTab(key)}
               style={{color:tab===key?config.accentColor:"#888"}}>
               <span style={{fontSize:22,lineHeight:1}}>{icon}</span>
@@ -250,6 +250,7 @@ export default function App() {
               {badge>0&&<span style={{position:"absolute",top:4,right:"10%",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 4px"}}>{badge}</span>}
             </button>
           ))}
+          <button className="mobile-nav-btn" onClick={()=>changeTab("proformas")} style={{color:tab==="proformas"?config.accentColor:"#888"}}><span style={{fontSize:20,lineHeight:1}}>🧾</span><span style={{fontSize:9}}>Proformas</span></button>
           <button className="mobile-nav-btn" onClick={()=>changeTab(tab==="config"?"dashboard":"config")}
             style={{color:tab==="config"?config.accentColor:"#888"}}>
             <span style={{fontSize:22,lineHeight:1}}>⚙</span>

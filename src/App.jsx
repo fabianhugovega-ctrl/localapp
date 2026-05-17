@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
+import Proformas from './Proformas.jsx';
 
 // ══════════════════════════════════════════════════════════════════
 // CONFIG & CONSTANTS
@@ -170,7 +171,8 @@ export default function App() {
     {key:"agenda",icon:"◷",label:"Agenda",badge:todayAppts},
     {key:"stock",icon:"▦",label:"Stock",badge:lowStock.length},
     {key:"caja",icon:"◎",label:"Caja"},
-    {key:"config",icon:"⚙",label:"Configuración"},
+    {key:"proformas",icon:"🧾",label:"Proformas"},
+{key:"config",icon:"⚙",label:"Configuración"},
   ];
 
   if(loading) return (
@@ -220,6 +222,8 @@ export default function App() {
         {tab==="agenda" && <Agenda appointments={appointments} setAppointments={setAppointments} clients={clients} config={config} reload={loadAll}/>}
         {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt} reload={loadAll}/>}
         {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll}/>}
+        {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
+{tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
         {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll}/>}
       </div>
     </div>

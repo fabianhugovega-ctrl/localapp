@@ -17,8 +17,8 @@
     <script type="module" src="/src/main.jsx"></script>
   <script>
       if('serviceWorker' in navigator){
-        window.addEventListener('load',()=>{
-          navigator.serviceWorker.register('/sw.js');
+        navigator.serviceWorker.getRegistrations().then(regs=>{
+          regs.forEach(reg=>reg.unregister());
         });
       }
     </script>

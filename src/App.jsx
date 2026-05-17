@@ -166,9 +166,9 @@ export default function App() {
     {key:"agenda",icon:"◷",label:"Agenda",badge:todayAppts},
     {key:"stock",icon:"▦",label:"Stock",badge:lowStock.length},
     {key:"caja",icon:"◎",label:"Caja"},
-    {key:"proformas",icon:"🧾",label:"Proformas"},
   ];
   const NAV2=[
+    {key:"proformas",icon:"🧾",label:"Proformas"},
     {key:"config",icon:"⚙",label:"Config"},
   ];
 
@@ -176,7 +176,7 @@ export default function App() {
 
   if(loading) return (
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif"}}>
-      <style>{makeStyles(config.accentColor)}</style>
+      
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,marginBottom:8}}>{config.appIcon} {config.appName}</div>
         <div style={{color:"#aaa",fontSize:14}}>Cargando...</div>

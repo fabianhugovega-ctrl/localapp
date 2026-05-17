@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from "recharts";
 
 // ══════════════════════════════════════════════════════════════════
 // CONFIG & CONSTANTS
@@ -244,6 +245,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
       <div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,letterSpacing:"-0.03em",marginBottom:4}}>Dashboard</div>
       <div style={{color:"#888",fontSize:13,marginBottom:20}}>Bienvenido a {config.appName}</div>
 
+      <GraficoVentas movements={movements} fmt={fmt}/>
       {lowStock.length>0&&<div className="alert-banner"><span style={{fontSize:18}}>⚠️</span><span style={{fontWeight:700,fontSize:13}}>Stock bajo: {lowStock.map(p=>p.name).join(", ")}</span><button className="btn btn-outline btn-sm" style={{marginLeft:"auto"}} onClick={()=>setTab("stock")}>Ver</button></div>}
 
       <div style={{display:"flex",gap:12,marginBottom:20}}>
@@ -920,6 +922,35 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
         </div>
         <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className={`btn ${newM.type==="ingreso"?"btn-green":"btn-red"}`} onClick={addM} disabled={saving}>{saving?"Guardando...":"Registrar"}</button></div>
       </div></div>}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// GRAFICO VENTAS
+// ══════════════════════════════════════════════════════════════════
+function GraficoVentas({movements,fmt}){
+  const data = Array.from({length:6},(_,i)=>{
+    const d=new Date();d.setMonth(d.getMonth()-5+i);
+    const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const label=`${["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][d.getMonth()]}`;
+    const ingresos=movements.filter(m=>m.type==="ingreso"&&m.date?.startsWith(key)).reduce((a,m)=>a+Number(m.amount),0);
+    const egresos=movements.filter(m=>m.type==="egreso"&&m.date?.startsWith(key)).reduce((a,m)=>a+Number(m.amount),0);
+    return{label,ingresos,egresos,saldo:ingresos-egresos};
+  });
+  return(
+    <div className="card" style={{padding:20,marginBottom:16}}>
+      <div className="sec">Ingresos vs Egresos — últimos 6 meses</div>
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data} margin={{top:0,right:0,left:0,bottom:0}}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0ede6"/>
+          <XAxis dataKey="label" tick={{fontSize:12,fill:"#aaa"}} axisLine={false} tickLine={false}/>
+          <YAxis tick={{fontSize:11,fill:"#aaa"}} axisLine={false} tickLine={false} tickFormatter={v=>`$${(v/1000).toFixed(0)}k`}/>
+          <Tooltip formatter={(v)=>[fmt(v)]} labelStyle={{fontWeight:700}} contentStyle={{borderRadius:10,border:"1px solid #e8e4dc",fontSize:12}}/>
+          <Bar dataKey="ingresos" fill="#86efac" radius={[6,6,0,0]} name="Ingresos"/>
+          <Bar dataKey="egresos" fill="#fca5a5" radius={[6,6,0,0]} name="Egresos"/>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

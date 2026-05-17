@@ -416,6 +416,9 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
             {[["📱",sc.phone||"—"],["✉️",sc.email||"Sin email"],["💰",fmt(sc.totalSpent||0)+" total"]].map(([ic,v],i)=>(
               <div key={i} style={{display:"flex",gap:10,alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f5f3ef"}}><span style={{fontSize:15}}>{ic}</span><span style={{fontSize:13.5}}>{v}</span></div>
             ))}
+            {sc.phone&&sc.phone!=="—"&&<a href={`https://wa.me/54${sc.phone.replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#dcfce7",borderRadius:10,color:"#166534",fontWeight:700,fontSize:13.5,textDecoration:"none",marginTop:8,border:"1.5px solid #86efac",transition:"all .14s"}} onMouseEnter={e=>e.currentTarget.style.background="#bbf7d0"} onMouseLeave={e=>e.currentTarget.style.background="#dcfce7"}>
+              <span style={{fontSize:20}}>💬</span> Abrir WhatsApp
+            </a>}
           </div>
           <div className="card" style={{padding:18}}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><div className="sec" style={{marginBottom:0}}>Notas</div>{!editNote&&<button className="btn btn-outline btn-sm" onClick={()=>setEditNote(true)}>Editar</button>}</div>

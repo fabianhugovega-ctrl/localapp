@@ -166,9 +166,9 @@ export default function App() {
     {key:"agenda",icon:"◷",label:"Agenda",badge:todayAppts},
     {key:"stock",icon:"▦",label:"Stock",badge:lowStock.length},
     {key:"caja",icon:"◎",label:"Caja"},
+    {key:"proformas",icon:"🧾",label:"Proformas"},
   ];
   const NAV2=[
-    {key:"proformas",icon:"🧾",label:"Proformas"},
     {key:"config",icon:"⚙",label:"Config"},
   ];
 

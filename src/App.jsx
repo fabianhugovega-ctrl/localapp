@@ -57,13 +57,13 @@ const avatarBg=(id)=>`hsl(${id*67%360},55%,88%)`;
 const avatarTxt=(id)=>`hsl(${id*67%360},55%,32%)`;
 const tagColor=(tag,allTags)=>TAG_PALETTE[Math.max(0,allTags.indexOf(tag))%TAG_PALETTE.length];
 const getWeekDates=(base)=>{const d=new Date(base);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));return Array.from({length:7},(_,i)=>{const dd=new Date(mon);dd.setDate(mon.getDate()+i);return dd;});};
-const useIsMobile=()=>{const[m,setM]=useState(window.innerWidth<768);useEffect(()=>{const h=()=>setM(window.innerWidth<768);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);return m;};
+const useIsMobile=()=>window.innerWidth<768;
 
 // ══════════════════════════════════════════════════════════════════
 // GLOBAL STYLES
 // ══════════════════════════════════════════════════════════════════
 const makeStyles=(accent)=>`
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Instrument+Sans:wght@300;400;500;600&display=swap');
+
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Instrument Sans',sans-serif;overflow-x:hidden}
 ::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#d4d0c8;border-radius:3px}

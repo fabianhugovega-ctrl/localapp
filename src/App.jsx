@@ -166,7 +166,8 @@ export default function App() {
   const totalEgresos=movements.filter(m=>m.type==="egreso").reduce((a,m)=>a+Number(m.amount),0);
   const saldo=totalIngresos-totalEgresos;
 
-  const NAV=[
+  const isMobile = window.innerWidth < 768;
+  const NAV=
     {key:"dashboard",icon:"◈",label:"Dashboard"},
     {key:"clientes",icon:"◉",label:"Clientes"},
     {key:"agenda",icon:"◷",label:"Agenda",badge:todayAppts},
@@ -191,7 +192,7 @@ export default function App() {
       <style>{makeStyles(config.accentColor)}</style>
 
       {/* SIDEBAR */}
-      <div style={{width:210,flexShrink:0,background:"#fff",borderRight:"1px solid #e8e4dc",display:"flex",flexDirection:"column",padding:"18px 10px"}}>
+      <div style={{width:210,flexShrink:0,background:"#fff",borderRight:"1px solid #e8e4dc",display:isMobile?"none":"flex",flexDirection:"column",padding:"18px 10px"}}
         <div style={{paddingLeft:6,marginBottom:24,display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:36,height:36,background:config.accentColor,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{config.appIcon}</div>
           <div>
@@ -226,6 +227,21 @@ export default function App() {
         {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
 {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
         {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll}/>}
+        {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
+      </div>
+
+      {/* NAV MOBILE */}
+      {isMobile && (
+        <div style={{position:"fixed",bottom:0,left:0,right:0,background:"#fff",borderTop:"1px solid #e8e4dc",display:"flex",zIndex:100,paddingBottom:"env(safe-area-inset-bottom)"}}>
+          {NAV.slice(0,5).map(({key,icon,label,badge})=>(
+            <button key={key} onClick={()=>{setTab(key);setSelClient(null);}} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",color:tab===key?config.accentColor:"#888",fontFamily:"inherit",fontSize:10,fontWeight:600,gap:2,position:"relative"}}>
+              <span style={{fontSize:20}}>{icon}</span>
+              {label}
+              {badge>0&&<span style={{position:"absolute",top:4,right:"20%",background:"#ef4444",color:"#fff",borderRadius:20,fontSize:9,fontWeight:700,padding:"1px 4px"}}>{badge}</span>}
+            </button>
+          ))}
+        </div>
+      )}
       </div>
     </div>
   );

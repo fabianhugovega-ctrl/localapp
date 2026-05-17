@@ -167,7 +167,7 @@ export default function App() {
   const saldo=totalIngresos-totalEgresos;
 
   const isMobile = window.innerWidth < 768;
-  const NAV=
+  const NAV=[
     {key:"dashboard",icon:"◈",label:"Dashboard"},
     {key:"clientes",icon:"◉",label:"Clientes"},
     {key:"agenda",icon:"◷",label:"Agenda",badge:todayAppts},
@@ -192,7 +192,8 @@ export default function App() {
       <style>{makeStyles(config.accentColor)}</style>
 
       {/* SIDEBAR */}
-      <div style={{width:210,flexShrink:0,background:"#fff",borderRight:"1px solid #e8e4dc",display:isMobile?"none":"flex",flexDirection:"column",padding:"18px 10px"}}
+       <div style={{width:210,flexShrink:0,background:"#fff",borderRight:"1px solid #e8e4dc",display:isMobile?"none":"flex",flexDirection:"column",padding:"18px 10px"}}>
+
         <div style={{paddingLeft:6,marginBottom:24,display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:36,height:36,background:config.accentColor,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{config.appIcon}</div>
           <div>
@@ -242,7 +243,6 @@ export default function App() {
           ))}
         </div>
       )}
-      </div>
     </div>
   );
 }

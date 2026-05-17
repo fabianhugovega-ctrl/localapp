@@ -259,12 +259,12 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
   return(
     <div style={{padding:24,overflow:"auto"}}>
       <div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,letterSpacing:"-0.03em",marginBottom:4}}>Dashboard</div>
-      <div style={{color:"#888",fontSize:13,marginBottom:20}}>Bienvenido a {config.appName}</div>
+      <div style={{color:"#888",fontSize:13,marginBottom:16,flexWrap:"wrap"}}>Bienvenido a {config.appName}</div>
 
       <GraficoVentas movements={movements} fmt={fmt}/>
       {lowStock.length>0&&<div className="alert-banner"><span style={{fontSize:18}}>⚠️</span><span style={{fontWeight:700,fontSize:13}}>Stock bajo: {lowStock.map(p=>p.name).join(", ")}</span><button className="btn btn-outline btn-sm" style={{marginLeft:"auto"}} onClick={()=>setTab("stock")}>Ver</button></div>}
 
-      <div style={{display:"flex",gap:12,marginBottom:20}}>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
         {[
           {label:"Saldo",value:fmt(saldo),color:saldo>=0?"#166534":"#7f1d1d"},
           {label:"Ingresos",value:fmt(totalIngresos),color:"#166534"},
@@ -275,7 +275,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
         ].map((s,i)=>(
           <div key={i} className="stat" style={{textAlign:"center"}}>
             <div style={{fontSize:10,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:".07em"}}>{s.label}</div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,color:s.color,marginTop:2}}>{s.value}</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:isMobile?16:24,fontWeight:800,color:s.color,fontSize:isMobile?16:24,marginTop:2}}>{s.value}</div>
           </div>
         ))}
       </div>

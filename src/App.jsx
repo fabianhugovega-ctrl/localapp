@@ -1,13 +1,11 @@
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import Servicios from './Servicios.jsx';
 import Nomina from './Nomina.jsx';
+import Login from './Login.jsx';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
-// ══════════════════════════════════════════════════════════════════
-// CONFIG & CONSTANTS
-// ══════════════════════════════════════════════════════════════════
 const DEFAULT_CONFIG = {
   appName: "LocalApp", appIcon: "🏪", moneda: "$", accentColor: "#18181b",
   clientTags: ["VIP","frecuente","nuevo","mayorista","ocasional"],
@@ -44,9 +42,6 @@ const DAYS_FULL=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sá
 const MONTHS=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const HOURS=Array.from({length:14},(_,i)=>i+8);
 
-// ══════════════════════════════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════════════════════════════
 const pad=(n)=>String(n).padStart(2,"0");
 const fmtHour=(h,m=0)=>`${pad(h)}:${pad(m)}`;
 const fmtDate=(d)=>{if(!d)return"—";const[y,mo,day]=d.split("-");return`${day}/${mo}/${y}`;};
@@ -60,9 +55,6 @@ const tagColor=(tag,allTags)=>TAG_PALETTE[Math.max(0,allTags.indexOf(tag))%TAG_P
 const getWeekDates=(base)=>{const d=new Date(base);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));return Array.from({length:7},(_,i)=>{const dd=new Date(mon);dd.setDate(mon.getDate()+i);return dd;});};
 const useIsMobile=()=>window.innerWidth<768;
 
-// ══════════════════════════════════════════════════════════════════
-// GLOBAL STYLES
-// ══════════════════════════════════════════════════════════════════
 const makeStyles=(accent)=>`
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Instrument Sans',sans-serif;overflow-x:hidden}
@@ -108,11 +100,10 @@ input,textarea,select{font-family:'Instrument Sans',sans-serif}
 @media(min-width:768px){.page{padding:24px}}
 `;
 
-// ══════════════════════════════════════════════════════════════════
-// ROOT APP
-// ══════════════════════════════════════════════════════════════════
 export default function App() {
   const isMobile = useIsMobile();
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [config, setConfig] = useState(DEFAULT_CONFIG);
   const [tab, setTab] = useState("dashboard");
   const [clients, setClients] = useState([]);
@@ -122,10 +113,21 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [selClient, setSelClient] = useState(null);
 
-  useEffect(() => { loadAll(); loadConfig(); }, []);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => { if (user) { loadAll(); loadConfig(); } }, [user]);
 
   const loadConfig = async () => {
-    const { data } = await supabase.from('config').select('*');
+    const { data } = await supabase.from('config').select('*').eq('empresa_id', user.id);
     if (data && data.length > 0) {
       const cfg = {};
       data.forEach(row => { cfg[row.key] = row.value; });
@@ -137,12 +139,12 @@ export default function App() {
     setLoading(true);
     try {
       const [c, p, m, a, r, v] = await Promise.all([
-        supabase.from('clients').select('*').order('created_at', { ascending: false }),
-        supabase.from('products').select('*').order('created_at', { ascending: false }),
-        supabase.from('movements').select('*').order('date', { ascending: false }),
-        supabase.from('appointments').select('*').order('date', { ascending: true }),
-        supabase.from('reminders').select('*'),
-        supabase.from('visits').select('*').order('date', { ascending: false }),
+        supabase.from('clients').select('*').eq('empresa_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('products').select('*').eq('empresa_id', user.id).order('created_at', { ascending: false }),
+        supabase.from('movements').select('*').eq('empresa_id', user.id).order('date', { ascending: false }),
+        supabase.from('appointments').select('*').eq('empresa_id', user.id).order('date', { ascending: true }),
+        supabase.from('reminders').select('*').eq('empresa_id', user.id),
+        supabase.from('visits').select('*').eq('empresa_id', user.id).order('date', { ascending: false }),
       ]);
       const remindersData = r.data || [];
       const visitsData = v.data || [];
@@ -159,6 +161,24 @@ export default function App() {
     } catch(e) { console.error(e); }
     setLoading(false);
   };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setClients([]); setProducts([]); setMovements([]); setAppointments([]);
+    setConfig(DEFAULT_CONFIG);
+  };
+
+  if (authLoading) return (
+    <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,marginBottom:8}}>🏪 LocalApp</div>
+        <div style={{color:"#aaa",fontSize:14}}>Cargando...</div>
+      </div>
+    </div>
+  );
+
+  if (!user) return <Login onLogin={setUser} />;
 
   const fmt=(n)=>n===0?"—":`${config.moneda}${Number(n).toLocaleString("es-AR")}`;
   const tColor=(t)=>tagColor(t,config.clientTags);
@@ -177,12 +197,10 @@ export default function App() {
     {key:"caja",icon:"◎",label:"Caja"},
   ];
   const NAV2=[
-  {key:"servicios",icon:"🧹",label:"Servicios"},
-  {key:"nomina",icon:"👷",label:"Nómina"},
-  {key:"proformas",icon:"🧾",label:"Proformas"},
-  {key:"config",icon:"⚙",label:"Config"},
-];[
- 
+    {key:"servicios",icon:"🧹",label:"Servicios"},
+    {key:"nomina",icon:"👷",label:"Nómina"},
+    {key:"proformas",icon:"🧾",label:"Proformas"},
+    {key:"config",icon:"⚙",label:"Config"},
   ];
 
   const changeTab=(k)=>{setTab(k);setSelClient(null);};
@@ -220,7 +238,8 @@ export default function App() {
           </div>
           <div style={{marginTop:"auto",padding:"10px 2px"}}>
             {totalRem>0&&<div style={{background:"#fef9c3",border:"1.5px solid #fde047",borderRadius:10,padding:"9px 12px",fontSize:12,color:"#854d0e",fontWeight:600,cursor:"pointer",marginBottom:8}} onClick={()=>changeTab("clientes")}>🔔 {totalRem} recordatorio{totalRem>1?"s":""}</div>}
-            <div style={{fontSize:11,color:"#ccc",textAlign:"center"}}>v1.0 — {config.appName}</div>
+            <div style={{fontSize:11,color:"#aaa",textAlign:"center",marginBottom:6,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.email}</div>
+            <button onClick={handleLogout} style={{width:"100%",padding:"8px",borderRadius:9,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,border:"1.5px solid #e2dfd8",background:"#fff",color:"#888"}}>🔒 Cerrar sesión</button>
           </div>
         </div>
       )}
@@ -235,20 +254,20 @@ export default function App() {
             <div style={{display:"flex",gap:6}}>
               {totalRem>0&&<span style={{background:"#ef4444",color:"#fff",borderRadius:20,fontSize:10,fontWeight:700,padding:"2px 7px"}}>🔔{totalRem}</span>}
               {lowStock.length>0&&<span style={{background:"#d97706",color:"#fff",borderRadius:20,fontSize:10,fontWeight:700,padding:"2px 7px"}}>⚠️{lowStock.length}</span>}
+              <button onClick={handleLogout} style={{background:"none",border:"none",cursor:"pointer",fontSize:18}}>🔒</button>
             </div>
           </div>
         )}
 
         {tab==="dashboard" && <Dashboard clients={clients} products={products} movements={movements} appointments={appointments} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} lowStock={lowStock} setTab={changeTab} fmt={fmt} config={config} tColor={tColor} isMobile={isMobile}/>}
-        {tab==="clientes" && <Clientes clients={clients} setClients={setClients} products={products} setMovements={setMovements} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll} isMobile={isMobile}/>}
-        {tab==="agenda" && <Agenda appointments={appointments} setAppointments={setAppointments} clients={clients} config={config} reload={loadAll} isMobile={isMobile}/>}
-        {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile}/>}
-        {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile}/>}
-        {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
-        {tab==="servicios" && <Servicios clients={clients} config={config}/>}
-{tab==="nomina" && <Nomina config={config}/>}
-
-        {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll}/>}
+        {tab==="clientes" && <Clientes clients={clients} setClients={setClients} products={products} setMovements={setMovements} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="agenda" && <Agenda appointments={appointments} setAppointments={setAppointments} clients={clients} config={config} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="servicios" && <Servicios clients={clients} config={config} userId={user.id}/>}
+        {tab==="nomina" && <Nomina config={config} userId={user.id}/>}
+        {tab==="proformas" && <Proformas clients={clients} products={products} config={config} userId={user.id}/>}
+        {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id}/>}
       </div>
 
       {isMobile && (
@@ -271,15 +290,11 @@ export default function App() {
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// DASHBOARD
-// ══════════════════════════════════════════════════════════════════
 function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,totalEgresos,lowStock,setTab,fmt,config,tColor,isMobile}){
   const recentMovs=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,5);
   const topClients=[...clients].sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,4);
   const todayAppts=appointments.filter(a=>a.date===todayStr()).sort((a,b)=>a.hour-b.hour);
   const pendingRem=clients.flatMap(c=>(c.reminders||[]).filter(r=>!r.done).map(r=>({...r,clientName:c.name}))).slice(0,4);
-
   const chartData=Array.from({length:6},(_,i)=>{
     const d=new Date();d.setMonth(d.getMonth()-5+i);
     const key=`${d.getFullYear()}-${pad(d.getMonth()+1)}`;
@@ -288,7 +303,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
     const eg=movements.filter(m=>m.type==="egreso"&&(m.date||"").startsWith(key)).reduce((a,m)=>a+Number(m.amount),0);
     return{label,Ingresos:ing,Egresos:eg};
   });
-
   const stats=[
     {label:"Saldo",value:fmt(saldo),color:saldo>=0?"#166534":"#7f1d1d"},
     {label:"Ingresos",value:fmt(totalIngresos),color:"#166534"},
@@ -297,14 +311,11 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
     {label:"Turnos hoy",value:todayAppts.length,color:"#6366f1"},
     {label:"Stock bajo",value:lowStock.length,color:lowStock.length>0?"#d97706":"#18181b"},
   ];
-
   return(
     <div className="page">
       {!isMobile && <div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,letterSpacing:"-0.03em",marginBottom:4}}>Dashboard</div>}
       {!isMobile && <div style={{color:"#888",fontSize:13,marginBottom:16}}>Bienvenido a {config.appName}</div>}
-
       {lowStock.length>0&&<div className="alert-banner"><span>⚠️</span><span style={{fontWeight:700,fontSize:13}}>Stock bajo: {lowStock.map(p=>p.name).join(", ")}</span><button className="btn btn-outline btn-sm" style={{marginLeft:"auto"}} onClick={()=>setTab("stock")}>Ver</button></div>}
-
       <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8,marginBottom:16}}>
         {stats.map((s,i)=>(
           <div key={i} className="stat" style={{textAlign:"center",padding:isMobile?"10px 6px":"12px 14px"}}>
@@ -313,7 +324,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           </div>
         ))}
       </div>
-
       <div className="card" style={{padding:16,marginBottom:16}}>
         <div className="sec">Ingresos vs Egresos — últimos 6 meses</div>
         <ResponsiveContainer width="100%" height={isMobile?150:200}>
@@ -327,7 +337,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           </BarChart>
         </ResponsiveContainer>
       </div>
-
       <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:12}}>
         <div className="card" style={{padding:16}}>
           <div className="sec">Últimos movimientos</div>
@@ -340,7 +349,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           ))}
           {recentMovs.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:12}}>Sin movimientos</div>}
         </div>
-
         <div className="card" style={{padding:16}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
             <div className="sec" style={{marginBottom:0}}>Turnos de hoy</div>
@@ -356,7 +364,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           {todayAppts.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:12}}>Sin turnos hoy</div>}
         </div>
       </div>
-
       {!isMobile && (
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
           <div className="card" style={{padding:16}}>
@@ -387,10 +394,7 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// CLIENTES
-// ══════════════════════════════════════════════════════════════════
-function Clientes({clients,setClients,products,setMovements,movements,selClient,setSelClient,config,fmt,tColor,reload,isMobile}){
+function Clientes({clients,setClients,products,setMovements,movements,selClient,setSelClient,config,fmt,tColor,reload,isMobile,userId}){
   const [search,setSearch]=useState("");
   const [filterTag,setFilterTag]=useState("Todos");
   const [showNew,setShowNew]=useState(false);
@@ -417,7 +421,7 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
   const addClient=async()=>{
     if(!newC.name)return;setSaving(true);
     const tags=newC.tags?newC.tags.split(",").map(t=>t.trim()):[];
-    const{data,error}=await supabase.from('clients').insert({name:newC.name,phone:newC.phone,email:newC.email,tags,notes:newC.notes,total_spent:0}).select().single();
+    const{data,error}=await supabase.from('clients').insert({empresa_id:userId,name:newC.name,phone:newC.phone,email:newC.email,tags,notes:newC.notes,total_spent:0}).select().single();
     if(!error&&data){await reload();}
     setSaving(false);setShowNew(false);setNewC({name:"",phone:"",email:"",tags:"",notes:""});
   };
@@ -430,22 +434,21 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
 
   const addRem=async()=>{
     if(!newRem.text||!newRem.date||!selClient)return;
-    await supabase.from('reminders').insert({client_id:selClient.id,text:newRem.text,date:newRem.date,done:false});
+    await supabase.from('reminders').insert({empresa_id:userId,client_id:selClient.id,text:newRem.text,date:newRem.date,done:false});
     await reload();setNewRem({text:"",date:""});setShowRem(false);
   };
 
   const toggleRem=async(rem)=>{await supabase.from('reminders').update({done:!rem.done}).eq('id',rem.id);await reload();};
   const deleteRem=async(remId)=>{await supabase.from('reminders').delete().eq('id',remId);await reload();};
-
   const saleTotal=saleItems.reduce((a,si)=>{const p=products.find(p=>p.id===Number(si.productId));return a+(p?p.price*si.qty:0);},0);
 
   const addSale=async()=>{
     const valid=saleItems.filter(si=>si.productId&&si.qty>0);if(!valid.length||!selClient)return;
     setSaving(true);
     const desc=saleDesc||`Venta a ${selClient.name}`;
-    await supabase.from('visits').insert({client_id:selClient.id,date:saleDate,description:desc,amount:saleTotal});
+    await supabase.from('visits').insert({empresa_id:userId,client_id:selClient.id,date:saleDate,description:desc,amount:saleTotal});
     await supabase.from('clients').update({total_spent:(selClient.totalSpent||0)+saleTotal,last_visit:saleDate}).eq('id',selClient.id);
-    await supabase.from('movements').insert({type:'ingreso',category:config.catIngreso[0],description:desc,amount:saleTotal,date:saleDate,client_id:selClient.id});
+    await supabase.from('movements').insert({empresa_id:userId,type:'ingreso',category:config.catIngreso[0],description:desc,amount:saleTotal,date:saleDate,client_id:selClient.id});
     await reload();setSaleItems([{productId:"",qty:1}]);setSaleDesc("");setSaleDate(todayStr());setShowSale(false);setSaving(false);
   };
 
@@ -463,7 +466,6 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
           </div>
           <button className="btn btn-green btn-sm" onClick={()=>setShowSale(true)}>+ Venta</button>
         </div>
-
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"320px 1fr",gap:12,alignItems:"start"}}>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             <div className="card" style={{padding:16}}>
@@ -473,13 +475,11 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
               ))}
               {sc.phone&&sc.phone!=="—"&&<a href={`https://wa.me/54${sc.phone.replace(/\D/g,"")}`} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#dcfce7",borderRadius:10,color:"#166534",fontWeight:700,fontSize:13.5,textDecoration:"none",marginTop:8,border:"1.5px solid #86efac"}}><span style={{fontSize:20}}>💬</span> Abrir WhatsApp</a>}
             </div>
-
             <div className="card" style={{padding:16}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}><div className="sec" style={{marginBottom:0}}>Notas</div>{!editNote&&<button className="btn btn-outline btn-sm" onClick={()=>setEditNote(true)}>Editar</button>}</div>
               {editNote?<><textarea className="field" rows={3} value={noteVal} onChange={e=>setNoteVal(e.target.value)} style={{resize:"vertical"}} autoFocus/><div style={{display:"flex",gap:8,marginTop:8,justifyContent:"flex-end"}}><button className="btn btn-outline btn-sm" onClick={()=>setEditNote(false)}>Cancelar</button><button className="btn btn-dark btn-sm" onClick={saveNote}>Guardar</button></div></>
               :<div style={{fontSize:13.5,color:noteVal?"#18181b":"#aaa",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{noteVal||"Sin notas."}</div>}
             </div>
-
             <div className="card" style={{padding:16}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}><div className="sec" style={{marginBottom:0}}>Recordatorios</div><button className="btn btn-outline btn-sm" onClick={()=>setShowRem(true)}>+ Agregar</button></div>
               {(sc.reminders||[]).length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"8px 0"}}>Sin recordatorios</div>}
@@ -492,7 +492,6 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
               ))}
             </div>
           </div>
-
           <div className="card" style={{padding:16}}>
             <div className="sec">Historial ({(sc.visits||[]).length})</div>
             {(sc.visits||[]).length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"20px 0"}}>Sin visitas</div>}
@@ -506,7 +505,6 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
             ))}
           </div>
         </div>
-
         {showSale&&<div className="modal-bg" onClick={()=>setShowSale(false)}><div className="modal" onClick={e=>e.stopPropagation()}>
           <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>Registrar venta — {sc.name}</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -525,7 +523,6 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
           </div>
           <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowSale(false)}>Cancelar</button><button className="btn btn-green" onClick={addSale} disabled={saving}>{saving?"Guardando...":"Confirmar"}</button></div>
         </div></div>}
-
         {showRem&&<div className="modal-bg" onClick={()=>setShowRem(false)}><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:360}}>
           <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>Nuevo recordatorio</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -575,10 +572,7 @@ function Clientes({clients,setClients,products,setMovements,movements,selClient,
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// AGENDA
-// ══════════════════════════════════════════════════════════════════
-function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
+function Agenda({appointments,setAppointments,clients,config,reload,isMobile,userId}){
   const [viewMode,setViewMode]=useState(isMobile?"list":"week");
   const [curDate,setCurDate]=useState(todayDate());
   const [showModal,setShowModal]=useState(false);
@@ -595,7 +589,7 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
 
   const saveAppt=async(form)=>{
     if(form.id){await supabase.from('appointments').update({client_id:form.clientId||null,client_name:form.clientName,service:form.service,date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,color:form.color,notes:form.notes,status:form.status}).eq('id',form.id);}
-    else{await supabase.from('appointments').insert({client_id:form.clientId||null,client_name:form.clientName,service:form.service,date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,color:form.color,notes:form.notes,status:form.status||'confirmado'});}
+    else{await supabase.from('appointments').insert({empresa_id:userId,client_id:form.clientId||null,client_name:form.clientName,service:form.service,date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,color:form.color,notes:form.notes,status:form.status||'confirmado'});}
     await reload();setShowModal(false);
   };
 
@@ -622,7 +616,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
         </div>
         <button className="btn btn-dark btn-sm" style={{marginLeft:"auto"}} onClick={()=>openNew()}>+ Turno</button>
       </div>
-
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>
         {viewMode==="week"&&!isMobile&&(
           <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column"}}>
@@ -659,7 +652,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
             </div>
           </div>
         )}
-
         {viewMode==="day"&&(
           <div style={{flex:1,overflow:"auto"}}>
             <div style={{display:"grid",gridTemplateColumns:"48px 1fr"}}>
@@ -682,7 +674,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
             </div>
           </div>
         )}
-
         {viewMode==="list"&&(
           <div style={{flex:1,overflow:"auto",padding:isMobile?12:20}}>
             <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
@@ -699,7 +690,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
             </div>
           </div>
         )}
-
         {!isMobile&&(
           <div style={{width:190,background:"#fff",borderLeft:"1px solid #e8e4dc",padding:14,flexShrink:0,overflow:"auto"}}>
             <MiniCal curDate={curDate} setCurDate={(d)=>{setCurDate(d);setViewMode("day");}} appointments={appointments}/>
@@ -715,7 +705,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
           </div>
         )}
       </div>
-
       {selAppt&&<div className="modal-bg" onClick={()=>setSelAppt(null)}><div className="modal" style={{maxWidth:360}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <div style={{width:10,height:10,borderRadius:2,background:selAppt.color,flexShrink:0}}/>
@@ -731,7 +720,6 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
           <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={()=>delAppt(selAppt.id)}>🗑</button>
         </div>
       </div></div>}
-
       {showModal&&<ApptModal appt={editAppt} clients={clients} services={config.services} defaultDate={qDate||todayStr()} defaultHour={qHour||9} onSave={saveAppt} onDelete={delAppt} onClose={()=>setShowModal(false)}/>}
     </div>
   );
@@ -740,9 +728,9 @@ function Agenda({appointments,setAppointments,clients,config,reload,isMobile}){
 function ApptRow({a,showDate=false,onClick}){
   const st=STATUS_STYLES[a.status];
   return<div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 8px",borderRadius:9,cursor:"pointer",border:"1.5px solid transparent",marginBottom:4,transition:"all .12s"}} onMouseEnter={e=>{e.currentTarget.style.background="#f8f7f4";e.currentTarget.style.borderColor="#e2dfd8";}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderColor="transparent";}}>
-    <div style={{width:4,height:32,borderRadius:2,background:a.color,flexShrink:0}}/>
-    <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div><div style={{fontSize:11,color:"#888"}}>{showDate?`${(a.date||"").split("-").reverse().join("/")} · `:""}{fmtHour(a.hour,a.minute||0)} · {a.service}</div></div>
-    <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:10,background:st?.bg,color:st?.text,flexShrink:0}}>{st?.label}</span>
+  <div style={{width:4,height:32,borderRadius:2,background:a.color,flexShrink:0}}/>
+  <div style={{flex:1,minWidth:0}}><div style={{fontSize:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div><div style={{fontSize:11,color:"#888"}}>{showDate?`${(a.date||"").split("-").reverse().join("/")} · `:""}{fmtHour(a.hour,a.minute||0)} · {a.service}</div></div>
+  <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:10,background:st?.bg,color:st?.text,flexShrink:0}}>{st?.label}</span>
   </div>;
 }
 
@@ -799,10 +787,7 @@ function ApptModal({appt,clients,services,defaultDate,defaultHour,onSave,onDelet
   </div></div>;
 }
 
-// ══════════════════════════════════════════════════════════════════
-// STOCK
-// ══════════════════════════════════════════════════════════════════
-function Stock({products,setProducts,lowStock,fmt,reload,isMobile}){
+function Stock({products,setProducts,lowStock,fmt,reload,isMobile,userId}){
   const [showNew,setShowNew]=useState(false);
   const [showAdj,setShowAdj]=useState(null);
   const [search,setSearch]=useState("");
@@ -815,7 +800,7 @@ function Stock({products,setProducts,lowStock,fmt,reload,isMobile}){
   const cats=["Todos",...Array.from(new Set(products.map(p=>p.category).filter(Boolean)))];
   const filtered=products.filter(p=>(p.name.toLowerCase().includes(search.toLowerCase())||(p.sku||"").toLowerCase().includes(search.toLowerCase()))&&(filterCat==="Todos"||p.category===filterCat));
 
-  const addP=async()=>{if(!newP.name||!newP.price)return;setSaving(true);await supabase.from('products').insert({name:newP.name,sku:newP.sku,category:newP.category,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,min_stock:Number(newP.minStock)||5});await reload();setSaving(false);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);};
+  const addP=async()=>{if(!newP.name||!newP.price)return;setSaving(true);await supabase.from('products').insert({empresa_id:userId,name:newP.name,sku:newP.sku,category:newP.category,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,min_stock:Number(newP.minStock)||5});await reload();setSaving(false);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);};
   const applyAdj=async()=>{const q=Number(adjQty);if(!q||!showAdj)return;const newStock=Math.max(0,adjType==="add"?showAdj.stock+q:showAdj.stock-q);await supabase.from('products').update({stock:newStock}).eq('id',showAdj.id);await reload();setShowAdj(null);setAdjQty("");setAdjType("add");};
   const st=(p)=>p.stock===0?{label:"Sin stock",cls:"pill-red"}:p.stock<=p.min_stock?{label:"Bajo",cls:"pill-yellow"}:{label:"OK",cls:"pill-green"};
 
@@ -899,10 +884,7 @@ function Stock({products,setProducts,lowStock,fmt,reload,isMobile}){
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// CAJA
-// ══════════════════════════════════════════════════════════════════
-function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,config,fmt,reload,isMobile}){
+function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,config,fmt,reload,isMobile,userId}){
   const [showNew,setShowNew]=useState(false);
   const [filterType,setFilterType]=useState("todos");
   const [filterCat,setFilterCat]=useState("Todos");
@@ -912,7 +894,7 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
   const allCats=["Todos",...config.catIngreso,...config.catEgreso];
   const filtered=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).filter(m=>(filterType==="todos"||m.type===filterType)&&(filterCat==="Todos"||m.category===filterCat));
 
-  const addM=async()=>{if(!newM.description||!newM.amount||!newM.date)return;setSaving(true);await supabase.from('movements').insert({type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);};
+  const addM=async()=>{if(!newM.description||!newM.amount||!newM.date)return;setSaving(true);await supabase.from('movements').insert({empresa_id:userId,type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);};
   const deleteM=async(id)=>{await supabase.from('movements').delete().eq('id',id);await reload();};
 
   const byMonth=filtered.reduce((acc,m)=>{const k=(m.date||"").slice(0,7);if(!acc[k])acc[k]={label:k,ing:0,eg:0};if(m.type==="ingreso")acc[k].ing+=Number(m.amount);else acc[k].eg+=Number(m.amount);return acc;},{});
@@ -972,10 +954,7 @@ function Caja({movements,setMovements,clients,saldo,totalIngresos,totalEgresos,c
   );
 }
 
-// ══════════════════════════════════════════════════════════════════
-// CONFIG
-// ══════════════════════════════════════════════════════════════════
-function Config({config,setConfig,reload}){
+function Config({config,setConfig,reload,userId}){
   const [draft,setDraft]=useState({...config});
   const [saved,setSaved]=useState(false);
   const [newTag,setNewTag]=useState("");
@@ -987,7 +966,7 @@ function Config({config,setConfig,reload}){
     setConfig(draft);
     const entries=Object.entries(draft);
     for(const [key,value] of entries){
-      await supabase.from('config').upsert({key,value},{onConflict:'key'});
+      await supabase.from('config').upsert({empresa_id:userId,key,value},{onConflict:'empresa_id,key'});
     }
     setSaved(true);
     setTimeout(()=>setSaved(false),2500);
@@ -1002,7 +981,6 @@ function Config({config,setConfig,reload}){
     <div className="page" style={{maxWidth:680}}>
       <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,marginBottom:4}}>Configuración</div>
       <div style={{color:"#888",fontSize:13,marginBottom:18}}>Personalizá la app para cada negocio</div>
-
       <div className="settings-section">
         <div className="sec">Identidad</div>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -1017,7 +995,6 @@ function Config({config,setConfig,reload}){
           <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Moneda</label><input className="field" style={{width:90}} value={draft.moneda} onChange={e=>setDraft(p=>({...p,moneda:e.target.value}))}/></div>
         </div>
       </div>
-
       {[
         {title:"Etiquetas de clientes",key:"clientTags",newVal:newTag,setNew:setNewTag,add:addTag,cs:{},rmv:(t)=>setDraft(p=>({...p,clientTags:p.clientTags.filter(x=>x!==t)}))},
         {title:"Categorías de ingresos",key:"catIngreso",newVal:newCI,setNew:setNewCI,add:addCI,cs:{background:"#f0fdf4",borderColor:"#86efac",color:"#166534"},rmv:(t)=>setDraft(p=>({...p,catIngreso:p.catIngreso.filter(x=>x!==t)}))},
@@ -1030,7 +1007,6 @@ function Config({config,setConfig,reload}){
           <div style={{display:"flex",gap:8}}><input className="field" placeholder="Nueva..." value={newVal} onChange={e=>setNew(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/><button className="btn btn-outline btn-sm" style={{whiteSpace:"nowrap"}} onClick={add}>+ Agregar</button></div>
         </div>
       ))}
-
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button className="btn btn-dark" onClick={save} style={{padding:"10px 24px"}}>{saved?"✓ Guardado":"Guardar cambios"}</button>
         {saved&&<span style={{fontSize:13,color:"#166534",fontWeight:600}}>¡Aplicado!</span>}
@@ -1038,3 +1014,4 @@ function Config({config,setConfig,reload}){
     </div>
   );
 }
+

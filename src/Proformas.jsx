@@ -4,13 +4,11 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "./supabase.js";
 
-// ─── HELPERS ────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
 const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
 const fmtDate = (d) => { if(!d) return "—"; const [y,m,day]=d.split("-"); return `${day}/${m}/${y}`; };
 const nroProforma = () => `PRO-${Date.now().toString().slice(-6)}`;
 
-// ─── ESTILOS ────────────────────────────────────────────────────
 const G = `
 .proforma-table { width:100%; border-collapse:collapse; }
 .proforma-table th { background:#f8f7f4; padding:10px 13px; text-align:left; font-size:11px; font-weight:700; color:#888; text-transform:uppercase; letter-spacing:.06em; border-bottom:1.5px solid #e8e4dc; }
@@ -34,8 +32,7 @@ const G = `
 .stat{background:#fff;border-radius:14px;padding:16px 18px;border:1px solid #e8e4dc;flex:1;min-width:0}
 `;
 
-// ─── COMPONENTE PRINCIPAL ────────────────────────────────────────
-export default function Proformas({ clients = [], products = [], config = {} }) {
+export default function Proformas({ clients = [], products = [], config = {}, userId }) {
   const fmt = (n) => `${config.moneda || "$"}${Number(n).toLocaleString("es-AR")}`;
   const [proformas, setProformas] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,13 +40,14 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
   const [showDetail, setShowDetail] = useState(null);
   const [showBarcodes, setShowBarcodes] = useState(false);
 
-  useEffect(() => { loadProformas(); }, []);
+  useEffect(() => { if (userId) loadProformas(); }, [userId]);
 
   const loadProformas = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("proformas")
       .select("*")
+      .eq("empresa_id", userId)
       .order("created_at", { ascending: false });
     if (!error) setProformas(data || []);
     setLoading(false);
@@ -57,6 +55,7 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
 
   const addProforma = async (p) => {
     const { error } = await supabase.from("proformas").insert({
+      empresa_id: userId,
       nro: nroProforma(),
       fecha: todayStr(),
       vencimiento: p.vencimiento || null,
@@ -97,7 +96,6 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
     <div style={{ padding: 24, fontFamily: "'Instrument Sans', sans-serif" }}>
       <style>{G}</style>
 
-      {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:20 }}>
         <div style={{ fontFamily:"'Syne',sans-serif", fontSize:24, fontWeight:800, letterSpacing:"-0.02em" }}>
           🧾 Proformas & Remitos
@@ -112,7 +110,6 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
         </div>
       </div>
 
-      {/* Stats */}
       <div style={{ display:"flex", gap:12, marginBottom:20 }}>
         {[
           { label:"Total proformas", value: proformas.length },
@@ -127,7 +124,6 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
         ))}
       </div>
 
-      {/* Lista */}
       <div className="card" style={{ overflow:"hidden" }}>
         {loading ? (
           <div style={{ textAlign:"center", padding:48, color:"#aaa" }}>Cargando...</div>
@@ -204,7 +200,6 @@ export default function Proformas({ clients = [], products = [], config = {} }) 
   );
 }
 
-// ─── MODAL NUEVA PROFORMA ────────────────────────────────────────
 function NuevaProformaModal({ clients, products, config, fmt, onSave, onClose }) {
   const [clientId, setClientId] = useState("");
   const [clientName, setClientName] = useState("");
@@ -258,8 +253,7 @@ function NuevaProformaModal({ clients, products, config, fmt, onSave, onClose })
             <div className="sec" style={{ marginBottom:8 }}>Productos / Servicios</div>
             {items.map((it, idx) => (
               <div key={idx} style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr auto", gap:8, marginBottom:8 }}>
-                <select className="field" value={it.productId}
-                  onChange={e => handleProduct(idx, e.target.value)}>
+                <select className="field" value={it.productId} onChange={e => handleProduct(idx, e.target.value)}>
                   <option value="">— Producto o escribí —</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
@@ -300,7 +294,6 @@ function NuevaProformaModal({ clients, products, config, fmt, onSave, onClose })
   );
 }
 
-// ─── MODAL DETALLE / PDF ─────────────────────────────────────────
 function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEstado, onDelete, onClose }) {
   const st = estadoStyle[proforma.estado] || estadoStyle.borrador;
 
@@ -370,14 +363,12 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
     doc.setFontSize(8);
     doc.setTextColor(160);
     doc.text(`Generado por ${appName} · ${fmtDate(proforma.fecha)}`, 20, 285);
-
     doc.save(`${proforma.nro}-${proforma.client_name || "proforma"}.pdf`);
   };
 
   const compartirWhatsApp = () => {
     const texto = `Hola! Te adjunto la proforma *${proforma.nro}* por un total de *${fmt(proforma.total)}*. Quedamos a disposición para cualquier consulta.`;
-    const url = `https://wa.me/?text=${encodeURIComponent(texto)}`;
-    window.open(url, "_blank");
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank");
   };
 
   return (
@@ -403,12 +394,7 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
 
         <table className="proforma-table" style={{ marginBottom:12 }}>
           <thead>
-            <tr>
-              <th>Descripción</th>
-              <th>Cant.</th>
-              <th>Precio</th>
-              <th>Total</th>
-            </tr>
+            <tr><th>Descripción</th><th>Cant.</th><th>Precio</th><th>Total</th></tr>
           </thead>
           <tbody>
             {(proforma.items || []).map((it, i) => (
@@ -449,15 +435,9 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
         </div>
 
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-          <button className="btn btn-dark" onClick={generarPDF} style={{ flex:1 }}>
-            📄 Descargar PDF
-          </button>
-          <button className="btn btn-green" onClick={compartirWhatsApp} style={{ flex:1 }}>
-            💬 Compartir WhatsApp
-          </button>
-          <button className="btn btn-outline btn-sm" style={{ color:"#ef4444", borderColor:"#fecaca" }} onClick={onDelete}>
-            🗑
-          </button>
+          <button className="btn btn-dark" onClick={generarPDF} style={{ flex:1 }}>📄 Descargar PDF</button>
+          <button className="btn btn-green" onClick={compartirWhatsApp} style={{ flex:1 }}>💬 Compartir WhatsApp</button>
+          <button className="btn btn-outline btn-sm" style={{ color:"#ef4444", borderColor:"#fecaca" }} onClick={onDelete}>🗑</button>
           <button className="btn btn-outline btn-sm" onClick={onClose}>Cerrar</button>
         </div>
       </div>
@@ -465,7 +445,6 @@ function DetalleProformaModal({ proforma, config, fmt, estadoStyle, onChangeEsta
   );
 }
 
-// ─── MODAL CÓDIGOS DE BARRA ──────────────────────────────────────
 function BarcodesModal({ products, onClose }) {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState([]);
@@ -474,13 +453,9 @@ function BarcodesModal({ products, onClose }) {
     p.name.toLowerCase().includes(search.toLowerCase()) || (p.sku||"").toLowerCase().includes(search.toLowerCase())
   );
 
-  const toggleSelect = (id) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-
+  const toggleSelect = (id) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   const selectAll = () => setSelected(filtered.map(p => p.id));
   const clearAll = () => setSelected([]);
-
   const toShow = selected.length > 0 ? products.filter(p => selected.includes(p.id)) : filtered;
 
   const printBarcodes = () => {

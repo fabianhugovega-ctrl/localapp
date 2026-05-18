@@ -8,7 +8,7 @@ const fmtDate = (d) => { if(!d) return "—"; const [y,m,day]=d.split("-"); retu
 const UNITS = ["por visita","por hora","por m²","por día","por semana","por mes","por persona","por ítem"];
 const CATEGORIES = ["Limpieza general","Limpieza profunda","Desinfección","Mantenimiento","Jardinería","Fumigación","Pintura","Plomería","Electricidad","Carpintería","Otro"];
 
-export default function Servicios({ clients = [], config = {} }) {
+export default function Servicios({ clients = [], config = {}, userId }) {
   const fmt = (n) => `${config.moneda || "$"}${Number(n).toLocaleString("es-AR")}`;
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -19,11 +19,11 @@ export default function Servicios({ clients = [], config = {} }) {
   const [filterCat, setFilterCat] = useState("Todos");
   const [filterActive, setFilterActive] = useState("todos");
 
-  useEffect(() => { loadServices(); }, []);
+  useEffect(() => { if (userId) loadServices(); }, [userId]);
 
   const loadServices = async () => {
     setLoading(true);
-    const { data } = await supabase.from("services").select("*").order("created_at", { ascending: false });
+    const { data } = await supabase.from("services").select("*").eq("empresa_id", userId).order("created_at", { ascending: false });
     setServices(data || []);
     setLoading(false);
   };
@@ -57,7 +57,6 @@ export default function Servicios({ clients = [], config = {} }) {
 
   return (
     <div style={{ padding: 24, fontFamily: "'Instrument Sans', sans-serif" }}>
-      {/* Header */}
       <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:20, flexWrap:"wrap" }}>
         <div style={{ fontFamily:"'Syne',sans-serif", fontSize:22, fontWeight:800, letterSpacing:"-0.02em" }}>
           🧹 Servicios
@@ -67,7 +66,6 @@ export default function Servicios({ clients = [], config = {} }) {
         </div>
       </div>
 
-      {/* Stats */}
       <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
         {stats.map((s,i) => (
           <div key={i} className="stat">
@@ -77,7 +75,6 @@ export default function Servicios({ clients = [], config = {} }) {
         ))}
       </div>
 
-      {/* Filtros */}
       <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap", alignItems:"center" }}>
         <input className="field" style={{ flex:1, minWidth:180 }} placeholder="🔍 Buscar servicio..." value={search} onChange={e => setSearch(e.target.value)} />
         <div style={{ display:"flex", gap:4 }}>
@@ -93,7 +90,6 @@ export default function Servicios({ clients = [], config = {} }) {
         ))}
       </div>
 
-      {/* Lista */}
       {loading ? (
         <div style={{ textAlign:"center", padding:48, color:"#aaa" }}>Cargando...</div>
       ) : (
@@ -141,9 +137,38 @@ export default function Servicios({ clients = [], config = {} }) {
         </div>
       )}
 
-      {showNew && <ServiceModal onSave={async (form) => { await supabase.from("services").insert(form); await loadServices(); setShowNew(false); }} onClose={() => setShowNew(false)} />}
-      {showEdit && <ServiceModal service={showEdit} onSave={async (form) => { await supabase.from("services").update(form).eq("id", showEdit.id); await loadServices(); setShowEdit(null); }} onDelete={() => deleteService(showEdit.id)} onClose={() => setShowEdit(null)} />}
-      {showAssign && <AssignModal service={showAssign} clients={clients} config={config} fmt={fmt} onClose={() => setShowAssign(null)} />}
+      {showNew && (
+        <ServiceModal
+          onSave={async (form) => {
+            await supabase.from("services").insert({ ...form, empresa_id: userId });
+            await loadServices();
+            setShowNew(false);
+          }}
+          onClose={() => setShowNew(false)}
+        />
+      )}
+      {showEdit && (
+        <ServiceModal
+          service={showEdit}
+          onSave={async (form) => {
+            await supabase.from("services").update(form).eq("id", showEdit.id);
+            await loadServices();
+            setShowEdit(null);
+          }}
+          onDelete={() => deleteService(showEdit.id)}
+          onClose={() => setShowEdit(null)}
+        />
+      )}
+      {showAssign && (
+        <AssignModal
+          service={showAssign}
+          clients={clients}
+          config={config}
+          fmt={fmt}
+          userId={userId}
+          onClose={() => setShowAssign(null)}
+        />
+      )}
     </div>
   );
 }
@@ -180,7 +205,6 @@ function ServiceModal({ service, onSave, onDelete, onClose }) {
             <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Nombre *</label>
             <input className="field" placeholder="Ej: Limpieza profunda de oficinas" value={form.name} onChange={e => set("name", e.target.value)} autoFocus />
           </div>
-
           <div>
             <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Categoría</label>
             <select className="field" value={form.category} onChange={e => set("category", e.target.value)}>
@@ -188,12 +212,10 @@ function ServiceModal({ service, onSave, onDelete, onClose }) {
               {CATEGORIES.map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
-
           <div>
             <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Descripción</label>
             <textarea className="field" rows={3} placeholder="Detallá en qué consiste el servicio..." value={form.description} onChange={e => set("description", e.target.value)} style={{ resize:"vertical" }} />
           </div>
-
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:10 }}>
             <div>
               <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Precio</label>
@@ -210,7 +232,6 @@ function ServiceModal({ service, onSave, onDelete, onClose }) {
               </select>
             </div>
           </div>
-
           <div>
             <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:6 }}>Estado</label>
             <div style={{ display:"flex", gap:8 }}>
@@ -231,9 +252,9 @@ function ServiceModal({ service, onSave, onDelete, onClose }) {
   );
 }
 
-function AssignModal({ service, clients, fmt, onClose }) {
+function AssignModal({ service, clients, fmt, userId, onClose }) {
   const [clientId, setClientId] = useState("");
-  const [date, setDate] = useState(() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; });
+  const [date, setDate] = useState(todayStr());
   const [qty, setQty] = useState(1);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -245,6 +266,7 @@ function AssignModal({ service, clients, fmt, onClose }) {
     setSaving(true);
     const cl = clients.find(c => String(c.id) === String(clientId));
     await supabase.from("movements").insert({
+      empresa_id: userId,
       type: "ingreso",
       category: "Venta",
       description: `${service.name}${cl ? ` — ${cl.name}` : ""}${notes ? ` (${notes})` : ""}`,
@@ -254,6 +276,7 @@ function AssignModal({ service, clients, fmt, onClose }) {
     });
     if (clientId) {
       await supabase.from("visits").insert({
+        empresa_id: userId,
         client_id: Number(clientId),
         date,
         description: service.name,

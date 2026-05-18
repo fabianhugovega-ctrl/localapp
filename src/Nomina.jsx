@@ -23,7 +23,7 @@ const monthsSince = (hireDate) => {
 const TRAINING_TYPES = ["Seguridad e higiene","Primeros auxilios","Uso de equipos","Manejo de productos químicos","Protocolo de emergencias","Atención al cliente","Capacitación técnica","Otro"];
 const EQUIPMENT_TYPES = ["Casco","Guantes","Botas de seguridad","Chaleco reflectante","Arnés","Gafas de protección","Tapones auditivos","Mascarilla/Respirador","Uniforme","Ropa de trabajo","Kit de limpieza","Extintor","Linterna","Otro"];
 
-export default function Nomina({ config = {} }) {
+export default function Nomina({ config = {}, userId }) {
   const fmt = (n) => `${config.moneda || "$"}${Number(n).toLocaleString("es-AR")}`;
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,20 +31,28 @@ export default function Nomina({ config = {} }) {
   const [showNew, setShowNew] = useState(false);
   const [search, setSearch] = useState("");
 
-  useEffect(() => { loadEmployees(); }, []);
+  useEffect(() => { if (userId) loadEmployees(); }, [userId]);
 
   const loadEmployees = async () => {
     setLoading(true);
-    const { data: emps } = await supabase.from("employees").select("*").order("created_at", { ascending: false });
-    const { data: payments } = await supabase.from("employee_payments").select("*");
-    const { data: trainings } = await supabase.from("employee_trainings").select("*");
-    const { data: equipment } = await supabase.from("employee_equipment").select("*");
-
+    const { data: emps } = await supabase.from("employees").select("*").eq("empresa_id", userId).order("created_at", { ascending: false });
+    const empIds = (emps || []).map(e => e.id);
+    let payments = [], trainings = [], equipment = [];
+    if (empIds.length > 0) {
+      const [p, t, eq] = await Promise.all([
+        supabase.from("employee_payments").select("*").in("employee_id", empIds),
+        supabase.from("employee_trainings").select("*").in("employee_id", empIds),
+        supabase.from("employee_equipment").select("*").in("employee_id", empIds),
+      ]);
+      payments = p.data || [];
+      trainings = t.data || [];
+      equipment = eq.data || [];
+    }
     const enriched = (emps || []).map(e => ({
       ...e,
-      payments: (payments || []).filter(p => p.employee_id === e.id),
-      trainings: (trainings || []).filter(t => t.employee_id === e.id),
-      equipment: (equipment || []).filter(eq => eq.employee_id === e.id),
+      payments: payments.filter(p => p.employee_id === e.id),
+      trainings: trainings.filter(t => t.employee_id === e.id),
+      equipment: equipment.filter(eq => eq.employee_id === e.id),
     }));
     setEmployees(enriched);
     setLoading(false);
@@ -66,7 +74,7 @@ export default function Nomina({ config = {} }) {
   }, [employees]);
 
   if (selEmployee) {
-    return <EmployeeDetail employee={selEmployee} fmt={fmt} config={config} onBack={() => setSelEmployee(null)} reload={loadEmployees} />;
+    return <EmployeeDetail employee={selEmployee} fmt={fmt} config={config} userId={userId} onBack={() => setSelEmployee(null)} reload={loadEmployees} />;
   }
 
   return (
@@ -76,7 +84,6 @@ export default function Nomina({ config = {} }) {
         <button className="btn btn-dark" style={{ marginLeft:"auto" }} onClick={() => setShowNew(true)}>+ Nuevo empleado</button>
       </div>
 
-      {/* Stats */}
       <div style={{ display:"flex", gap:12, marginBottom:20, flexWrap:"wrap" }}>
         {[
           { label:"Total empleados", value:employees.length },
@@ -126,12 +133,21 @@ export default function Nomina({ config = {} }) {
         </div>
       )}
 
-      {showNew && <EmployeeModal onSave={async (form) => { await supabase.from("employees").insert(form); await loadEmployees(); setShowNew(false); }} onClose={() => setShowNew(false)} />}
+      {showNew && (
+        <EmployeeModal
+          onSave={async (form) => {
+            await supabase.from("employees").insert({ ...form, empresa_id: userId });
+            await loadEmployees();
+            setShowNew(false);
+          }}
+          onClose={() => setShowNew(false)}
+        />
+      )}
     </div>
   );
 }
 
-function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
+function EmployeeDetail({ employee: e, fmt, config, userId, onBack, reload }) {
   const [showEdit, setShowEdit] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showTraining, setShowTraining] = useState(false);
@@ -162,9 +178,7 @@ function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:16, alignItems:"start" }}>
-        {/* Columna izquierda */}
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {/* Datos */}
           <div className="card" style={{ padding:16 }}>
             <div className="sec">Datos personales</div>
             {[
@@ -186,7 +200,6 @@ function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
             {e.notes && <div style={{ marginTop:10, fontSize:13, color:"#555", background:"#f8f7f4", borderRadius:8, padding:"8px 10px" }}>{e.notes}</div>}
           </div>
 
-          {/* Pagos */}
           <div className="card" style={{ padding:16 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <div className="sec" style={{ marginBottom:0 }}>Pagos ({e.payments.length})</div>
@@ -211,9 +224,7 @@ function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
           </div>
         </div>
 
-        {/* Columna derecha */}
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          {/* Capacitaciones */}
           <div className="card" style={{ padding:16 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <div className="sec" style={{ marginBottom:0 }}>📚 Capacitaciones ({e.trainings.length})</div>
@@ -238,7 +249,6 @@ function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
             })}
           </div>
 
-          {/* Elementos de seguridad */}
           <div className="card" style={{ padding:16 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
               <div className="sec" style={{ marginBottom:0 }}>🦺 Elementos de seguridad ({e.equipment.length})</div>
@@ -262,35 +272,60 @@ function EmployeeDetail({ employee: e, fmt, config, onBack, reload }) {
         </div>
       </div>
 
-      {showEdit && <EmployeeModal employee={e} onSave={async (form) => { await supabase.from("employees").update(form).eq("id", e.id); await reload(); setShowEdit(false); }} onClose={() => setShowEdit(false)} />}
-      {showPayment && <PaymentModal employeeId={e.id} onSave={async (form) => { await supabase.from("employee_payments").insert({ ...form, employee_id: e.id }); await reload(); setShowPayment(false); }} onClose={() => setShowPayment(false)} />}
-      {showTraining && <TrainingModal onSave={async (form) => { await supabase.from("employee_trainings").insert({ ...form, employee_id: e.id }); await reload(); setShowTraining(false); }} onClose={() => setShowTraining(false)} />}
-      {showEquipment && <EquipmentModal onSave={async (form) => { await supabase.from("employee_equipment").insert({ ...form, employee_id: e.id }); await reload(); setShowEquipment(false); }} onClose={() => setShowEquipment(false)} />}
+      {showEdit && (
+        <EmployeeModal
+          employee={e}
+          onSave={async (form) => {
+            await supabase.from("employees").update(form).eq("id", e.id);
+            await reload();
+            setShowEdit(false);
+          }}
+          onClose={() => setShowEdit(false)}
+        />
+      )}
+      {showPayment && (
+        <PaymentModal
+          onSave={async (form) => {
+            await supabase.from("employee_payments").insert({ ...form, employee_id: e.id, empresa_id: userId });
+            await reload();
+            setShowPayment(false);
+          }}
+          onClose={() => setShowPayment(false)}
+        />
+      )}
+      {showTraining && (
+        <TrainingModal
+          onSave={async (form) => {
+            await supabase.from("employee_trainings").insert({ ...form, employee_id: e.id, empresa_id: userId });
+            await reload();
+            setShowTraining(false);
+          }}
+          onClose={() => setShowTraining(false)}
+        />
+      )}
+      {showEquipment && (
+        <EquipmentModal
+          onSave={async (form) => {
+            await supabase.from("employee_equipment").insert({ ...form, employee_id: e.id, empresa_id: userId });
+            await reload();
+            setShowEquipment(false);
+          }}
+          onClose={() => setShowEquipment(false)}
+        />
+      )}
     </div>
   );
 }
 
 function EmployeeModal({ employee, onSave, onClose }) {
   const [form, setForm] = useState({
-    name: employee?.name || "",
-    dni: employee?.dni || "",
-    position: employee?.position || "",
-    hire_date: employee?.hire_date || "",
-    salary: employee?.salary || "",
-    phone: employee?.phone || "",
-    email: employee?.email || "",
-    notes: employee?.notes || "",
+    name: employee?.name || "", dni: employee?.dni || "", position: employee?.position || "",
+    hire_date: employee?.hire_date || "", salary: employee?.salary || "",
+    phone: employee?.phone || "", email: employee?.email || "", notes: employee?.notes || "",
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const enPrueba = isPrueba(form.hire_date);
-
-  const handleSave = async () => {
-    if (!form.name) return;
-    setSaving(true);
-    await onSave({ ...form, salary: Number(form.salary)||0 });
-    setSaving(false);
-  };
 
   return (
     <div className="modal-bg" onClick={onClose}>
@@ -298,46 +333,49 @@ function EmployeeModal({ employee, onSave, onClose }) {
         <div style={{ fontFamily:"'Syne',sans-serif", fontSize:18, fontWeight:800, marginBottom:18 }}>
           {employee ? "Editar empleado" : "Nuevo empleado"}
         </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            <div style={{ gridColumn:"1/-1" }}>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Nombre completo *</label>
-              <input className="field" placeholder="Juan Pérez" value={form.name} onChange={e => set("name", e.target.value)} autoFocus />
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>DNI</label>
-              <input className="field" placeholder="12345678" value={form.dni} onChange={e => set("dni", e.target.value)} />
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Puesto / Cargo</label>
-              <input className="field" placeholder="Operario de limpieza" value={form.position} onChange={e => set("position", e.target.value)} />
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Fecha de ingreso</label>
-              <input className="field" type="date" value={form.hire_date} onChange={e => set("hire_date", e.target.value)} />
-              {enPrueba && <div style={{ fontSize:11, color:"#854d0e", fontWeight:600, marginTop:4 }}>⏱ En período de prueba</div>}
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Sueldo mensual</label>
-              <input className="field" type="number" placeholder="0" value={form.salary} onChange={e => set("salary", e.target.value)} />
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Teléfono</label>
-              <input className="field" placeholder="11 1234-5678" value={form.phone} onChange={e => set("phone", e.target.value)} />
-            </div>
-            <div>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Email</label>
-              <input className="field" type="email" placeholder="juan@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
-            </div>
-            <div style={{ gridColumn:"1/-1" }}>
-              <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Notas</label>
-              <textarea className="field" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} style={{ resize:"none" }} />
-            </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+          <div style={{ gridColumn:"1/-1" }}>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Nombre completo *</label>
+            <input className="field" placeholder="Juan Pérez" value={form.name} onChange={e => set("name", e.target.value)} autoFocus />
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>DNI</label>
+            <input className="field" placeholder="12345678" value={form.dni} onChange={e => set("dni", e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Puesto / Cargo</label>
+            <input className="field" placeholder="Operario" value={form.position} onChange={e => set("position", e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Fecha de ingreso</label>
+            <input className="field" type="date" value={form.hire_date} onChange={e => set("hire_date", e.target.value)} />
+            {enPrueba && <div style={{ fontSize:11, color:"#854d0e", fontWeight:600, marginTop:4 }}>⏱ En período de prueba</div>}
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Sueldo mensual</label>
+            <input className="field" type="number" placeholder="0" value={form.salary} onChange={e => set("salary", e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Teléfono</label>
+            <input className="field" placeholder="11 1234-5678" value={form.phone} onChange={e => set("phone", e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Email</label>
+            <input className="field" type="email" placeholder="juan@email.com" value={form.email} onChange={e => set("email", e.target.value)} />
+          </div>
+          <div style={{ gridColumn:"1/-1" }}>
+            <label style={{ fontSize:11, fontWeight:600, color:"#555", display:"block", marginBottom:4 }}>Notas</label>
+            <textarea className="field" rows={2} value={form.notes} onChange={e => set("notes", e.target.value)} style={{ resize:"none" }} />
           </div>
         </div>
         <div style={{ display:"flex", gap:8, marginTop:18, justifyContent:"flex-end" }}>
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" onClick={handleSave} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
+          <button className="btn btn-dark" disabled={saving} onClick={async () => {
+            if (!form.name) return;
+            setSaving(true);
+            await onSave({ ...form, salary: Number(form.salary)||0 });
+            setSaving(false);
+          }}>{saving?"Guardando...":"Guardar"}</button>
         </div>
       </div>
     </div>
@@ -359,7 +397,12 @@ function PaymentModal({ onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8, marginTop:14, justifyContent:"flex-end" }}>
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-green" disabled={saving} onClick={async()=>{if(!form.amount)return;setSaving(true);await onSave({...form,amount:Number(form.amount)});setSaving(false);}}>{saving?"Guardando...":"Registrar"}</button>
+          <button className="btn btn-green" disabled={saving} onClick={async()=>{
+            if(!form.amount)return;
+            setSaving(true);
+            await onSave({...form, amount:Number(form.amount)});
+            setSaving(false);
+          }}>{saving?"Guardando...":"Registrar"}</button>
         </div>
       </div>
     </div>
@@ -399,7 +442,12 @@ function TrainingModal({ onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8, marginTop:14, justifyContent:"flex-end" }}>
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.type)return;setSaving(true);await onSave({...form,expiry_date:form.expiry_date||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+          <button className="btn btn-dark" disabled={saving} onClick={async()=>{
+            if(!form.type)return;
+            setSaving(true);
+            await onSave({...form, expiry_date:form.expiry_date||null});
+            setSaving(false);
+          }}>{saving?"Guardando...":"Guardar"}</button>
         </div>
       </div>
     </div>
@@ -439,7 +487,12 @@ function EquipmentModal({ onSave, onClose }) {
         </div>
         <div style={{ display:"flex", gap:8, marginTop:14, justifyContent:"flex-end" }}>
           <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.item)return;setSaving(true);await onSave({...form,next_renewal:form.next_renewal||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+          <button className="btn btn-dark" disabled={saving} onClick={async()=>{
+            if(!form.item)return;
+            setSaving(true);
+            await onSave({...form, next_renewal:form.next_renewal||null});
+            setSaving(false);
+          }}>{saving?"Guardando...":"Guardar"}</button>
         </div>
       </div>
     </div>

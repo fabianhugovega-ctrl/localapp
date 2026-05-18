@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import Servicios from './Servicios.jsx';
+import Nomina from './Nomina.jsx';
 
 // ══════════════════════════════════════════════════════════════════
 // CONFIG & CONSTANTS
@@ -175,8 +177,12 @@ export default function App() {
     {key:"caja",icon:"◎",label:"Caja"},
   ];
   const NAV2=[
-    {key:"proformas",icon:"🧾",label:"Proformas"},
-    {key:"config",icon:"⚙",label:"Config"},
+  {key:"servicios",icon:"🧹",label:"Servicios"},
+  {key:"nomina",icon:"👷",label:"Nómina"},
+  {key:"proformas",icon:"🧾",label:"Proformas"},
+  {key:"config",icon:"⚙",label:"Config"},
+];[
+ 
   ];
 
   const changeTab=(k)=>{setTab(k);setSelClient(null);};
@@ -239,6 +245,9 @@ export default function App() {
         {tab==="stock" && <Stock products={products} setProducts={setProducts} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile}/>}
         {tab==="caja" && <Caja movements={movements} setMovements={setMovements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile}/>}
         {tab==="proformas" && <Proformas clients={clients} products={products} config={config}/>}
+        {tab==="servicios" && <Servicios clients={clients} config={config}/>}
+{tab==="nomina" && <Nomina config={config}/>}
+
         {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll}/>}
       </div>
 

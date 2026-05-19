@@ -1,3 +1,5 @@
+import Transporte from './Transporte.jsx';
+
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
@@ -200,7 +202,8 @@ export default function App() {
     {key:"servicios",icon:"🧹",label:"Servicios"},
     {key:"nomina",icon:"👷",label:"Nómina"},
     {key:"proformas",icon:"🧾",label:"Proformas"},
-    {key:"config",icon:"⚙",label:"Config"},
+    {key:"transporte",icon:"🚛",label:"Transporte"},
+{key:"config",icon:"⚙",label:"Config"},
   ];
 
   const changeTab=(k)=>{setTab(k);setSelClient(null);};
@@ -267,7 +270,8 @@ export default function App() {
         {tab==="servicios" && <Servicios clients={clients} config={config} userId={user.id}/>}
         {tab==="nomina" && <Nomina config={config} userId={user.id}/>}
         {tab==="proformas" && <Proformas clients={clients} products={products} config={config} userId={user.id}/>}
-        {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id}/>}
+        {tab==="transporte" && <Transporte clients={clients} config={config} userId={user.id}/>}
+{tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id}/>}
       </div>
 
       {isMobile && (

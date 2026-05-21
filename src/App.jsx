@@ -1,9 +1,12 @@
+
+
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
 import Servicios from './Servicios.jsx';
 import Nomina from './Nomina.jsx';
 import Transporte from './Transporte.jsx';
+import Prestamos from './Prestamos.jsx';
 import Login from './Login.jsx';
 import { exportCaja, exportClientes, exportStock, exportAgenda, exportNomina, exportProformas } from './exportExcel.js';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from "recharts";
@@ -16,7 +19,7 @@ const DEFAULT_CONFIG = {
   catIngreso: ["Venta","Otro ingreso"],
   catEgreso: ["Proveedor","Servicios","Alquiler","Personal","Otro gasto"],
   services: ["Corte","Coloración","Consulta","Servicio general","Entrega"],
-  modules: ["dashboard","clientes","agenda","stock","caja","servicios","nomina","proformas","transporte","config"],
+  modules: ["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","config"],
   presupuestoMensual: 0,
   darkMode: false,
 };
@@ -53,6 +56,7 @@ const ALL_MODULES = [
   {key:"servicios",icon:"🧹",label:"Servicios"},
   {key:"nomina",icon:"👷",label:"Nómina"},
   {key:"transporte",icon:"🚛",label:"Transporte"},
+  {key:"prestamos",icon:"💰",label:"Préstamos"},
   {key:"proformas",icon:"🧾",label:"Proformas"},
   {key:"config",icon:"⚙",label:"Config"},
 ];
@@ -359,6 +363,7 @@ export default function App() {
         {tab==="caja" && <Caja movements={movements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
         {tab==="servicios" && <Servicios clients={clients} config={config} userId={user.id}/>}
         {tab==="nomina" && <Nomina config={config} userId={user.id}/>}
+       {tab==="prestamos" && <Prestamos clients={clients} config={config} userId={user.id}/>}
         {tab==="transporte" && <Transporte clients={clients} config={config} userId={user.id}/>}
         {tab==="proformas" && <Proformas clients={clients} products={products} config={config} userId={user.id}/>}
         {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id} saveConfigKey={saveConfigKey}/>}

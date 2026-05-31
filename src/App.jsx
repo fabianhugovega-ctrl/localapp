@@ -144,23 +144,38 @@ export default function App() {
   const [showNotifications,setShowNotifications]=useState(false);
 
   useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{
-      setUser(session?.user??null);
+    const checkRole=async(u)=>{
+      const {data}=await supabase.from('user_roles').select('*').eq('user_id',u.id).maybeSingle();
+      if(data && data.role==='chofer'){
+        setUserRole('chofer');
+        if(data.driver_id){
+          const {data:driver}=await supabase.from('drivers').select('*').eq('id',data.driver_id).maybeSingle();
+          setDriverInfo({...driver, empresa_id: data.empresa_id});
+        } else {
+          setDriverInfo({empresa_id: data.empresa_id, name: u.email});
+        }
+      } else {
+        setUserRole('admin');
+      }
       setAuthLoading(false);
+    };
+    supabase.auth.getSession().then(({data:{session}})=>{
+      const u=session?.user??null;
+      setUser(u);
+      if(u) checkRole(u);
+      else setAuthLoading(false);
     });
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
-      setUser(session?.user??null);
+      const u=session?.user??null;
+      setUser(u);
+      if(u) checkRole(u);
     });
     return ()=>subscription.unsubscribe();
   },[]);
 
-  useEffect(()=>{if(user){loadAll();loadConfig();checkUserRole();}}, [user]);
+  useEffect(()=>{if(userRole==="admin"){loadAll();loadConfig();}else if(userRole==="chofer"){setLoading(false);}},[userRole]);
 
-  const checkUserRole=async()=>{
-    const {data}=await supabase.from('user_roles').select('*, drivers(*)').eq('user_id',user.id).maybeSingle();
-    if(data){setUserRole(data.role);setDriverInfo(data.drivers);}
-    else{setUserRole('admin');}
-  };
+
 
   const loadConfig=async()=>{
     const {data}=await supabase.from('config').select('*').eq('empresa_id',user.id);

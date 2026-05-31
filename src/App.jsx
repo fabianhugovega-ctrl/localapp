@@ -1,5 +1,3 @@
-
-
 import { useState, useEffect } from "react";
 import { supabase } from './supabase.js';
 import Proformas from './Proformas.jsx';
@@ -7,47 +5,49 @@ import Servicios from './Servicios.jsx';
 import Nomina from './Nomina.jsx';
 import Transporte from './Transporte.jsx';
 import Prestamos from './Prestamos.jsx';
+import ParteDiarioChofer from './ParteDiarioChofer.jsx';
 import Login from './Login.jsx';
-import { exportCaja, exportClientes, exportStock, exportAgenda, exportNomina, exportProformas } from './exportExcel.js';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from "recharts";
+import { exportCaja, exportClientes, exportStock, exportAgenda } from './exportExcel.js';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
 const DEFAULT_CONFIG = {
-  appName: "LocalApp", appIcon: "🏪", moneda: "$", accentColor: "#18181b",
-  clientTags: ["VIP","frecuente","nuevo","mayorista","ocasional"],
-  catIngreso: ["Venta","Otro ingreso"],
-  catEgreso: ["Proveedor","Servicios","Alquiler","Personal","Otro gasto"],
-  services: ["Corte","Coloración","Consulta","Servicio general","Entrega"],
-  modules: ["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","config"],
-  presupuestoMensual: 0,
-  darkMode: false,
+  appName:"LocalApp", appIcon:"🏪", moneda:"$", accentColor:"#18181b",
+  clientTags:["VIP","frecuente","nuevo","mayorista","ocasional"],
+  catIngreso:["Venta","Otro ingreso"],
+  catEgreso:["Proveedor","Servicios","Alquiler","Personal","Otro gasto"],
+  services:["Corte","Coloración","Consulta","Servicio general","Entrega"],
+  modules:["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","config"],
+  presupuestoMensual:0,
+  darkMode:false,
 };
-const ACCENT_OPTIONS = [
+
+const ACCENT_OPTIONS=[
   {label:"Carbón",value:"#18181b"},{label:"Índigo",value:"#312e81"},
   {label:"Esmeralda",value:"#064e3b"},{label:"Bordo",value:"#4c0519"},
   {label:"Azul marino",value:"#1e3a5f"},{label:"Cobre",value:"#7c2d12"},
 ];
-const ICON_OPTIONS = ["🏪","🛍️","✂️","🍕","🔧","💇","👗","📦","🏋️","🌿","💅","🥐","🛒","🎨","🏥","🚛"];
-const TAG_PALETTE = [
+const ICON_OPTIONS=["🏪","🛍️","✂️","🍕","🔧","💇","👗","📦","🏋️","🌿","💅","🥐","🛒","🎨","🏥","🚛"];
+const TAG_PALETTE=[
   {bg:"#fff8e1",text:"#b8860b",border:"#f0c040"},{bg:"#e8f5e9",text:"#2e7d32",border:"#81c784"},
   {bg:"#e3f2fd",text:"#1565c0",border:"#64b5f6"},{bg:"#f3e5f5",text:"#7b1fa2",border:"#ce93d8"},
   {bg:"#fce4ec",text:"#c62828",border:"#ef9a9a"},{bg:"#e0f7fa",text:"#00695c",border:"#80cbc4"},
   {bg:"#fff3e0",text:"#e65100",border:"#ffb74d"},{bg:"#f1f8e9",text:"#558b2f",border:"#aed581"},
 ];
-const APPT_COLORS = [
+const APPT_COLORS=[
   {label:"Índigo",value:"#6366f1"},{label:"Cian",value:"#0891b2"},
   {label:"Ámbar",value:"#d97706"},{label:"Verde",value:"#16a34a"},
   {label:"Rosa",value:"#db2777"},{label:"Violeta",value:"#7c3aed"},
   {label:"Naranja",value:"#ea580c"},{label:"Pizarra",value:"#475569"},
 ];
-const STATUS_STYLES = {
+const STATUS_STYLES={
   confirmado:{bg:"#dcfce7",text:"#166534",label:"Confirmado"},
   pendiente:{bg:"#fef9c3",text:"#854d0e",label:"Pendiente"},
   cancelado:{bg:"#fee2e2",text:"#7f1d1d",label:"Cancelado"},
   completado:{bg:"#e0e7ff",text:"#3730a3",label:"Completado"},
 };
-const ALL_MODULES = [
+const ALL_MODULES=[
   {key:"dashboard",icon:"◈",label:"Panel"},
   {key:"clientes",icon:"◉",label:"Clientes"},
   {key:"agenda",icon:"◷",label:"Agenda"},
@@ -77,7 +77,6 @@ const avatarTxt=(id)=>`hsl(${id*67%360},55%,32%)`;
 const tagColor=(tag,allTags)=>TAG_PALETTE[Math.max(0,allTags.indexOf(tag))%TAG_PALETTE.length];
 const getWeekDates=(base)=>{const d=new Date(base);const day=d.getDay();const mon=new Date(d);mon.setDate(d.getDate()-(day===0?6:day-1));return Array.from({length:7},(_,i)=>{const dd=new Date(mon);dd.setDate(mon.getDate()+i);return dd;});};
 const useIsMobile=()=>window.innerWidth<768;
-const daysUntil=(dateStr)=>{if(!dateStr)return null;const diff=new Date(dateStr)-new Date();return Math.ceil(diff/(1000*60*60*24));};
 
 const makeStyles=(accent,dark=false)=>`
 *{box-sizing:border-box;margin:0;padding:0}
@@ -125,106 +124,106 @@ input,textarea,select{font-family:'Instrument Sans',sans-serif;color-scheme:${da
 `;
 
 export default function App() {
-  const isMobile = useIsMobile();
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [config, setConfig] = useState(DEFAULT_CONFIG);
-  const [tab, setTab] = useState("dashboard");
-  const [clients, setClients] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [movements, setMovements] = useState([]);
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [selClient, setSelClient] = useState(null);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [globalSearch, setGlobalSearch] = useState("");
-  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [showNotifications, setShowNotifications] = useState(false);
+  const isMobile=useIsMobile();
+  const [user,setUser]=useState(null);
+  const [authLoading,setAuthLoading]=useState(true);
+  const [userRole,setUserRole]=useState(null);
+  const [driverInfo,setDriverInfo]=useState(null);
+  const [config,setConfig]=useState(DEFAULT_CONFIG);
+  const [tab,setTab]=useState("dashboard");
+  const [clients,setClients]=useState([]);
+  const [products,setProducts]=useState([]);
+  const [movements,setMovements]=useState([]);
+  const [appointments,setAppointments]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [selClient,setSelClient]=useState(null);
+  const [showOnboarding,setShowOnboarding]=useState(false);
+  const [globalSearch,setGlobalSearch]=useState("");
+  const [showGlobalSearch,setShowGlobalSearch]=useState(false);
+  const [notifications,setNotifications]=useState([]);
+  const [showNotifications,setShowNotifications]=useState(false);
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      setUser(session?.user??null);
       setAuthLoading(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,session)=>{
+      setUser(session?.user??null);
     });
-    return () => subscription.unsubscribe();
-  }, []);
+    return ()=>subscription.unsubscribe();
+  },[]);
 
-  useEffect(() => { if (user) { loadAll(); loadConfig(); } }, [user]);
+  useEffect(()=>{if(user){loadAll();loadConfig();checkUserRole();}}, [user]);
 
-  const loadConfig = async () => {
-    const { data } = await supabase.from('config').select('*').eq('empresa_id', user.id);
-    if (data && data.length > 0) {
-      const cfg = {};
-      data.forEach(row => { cfg[row.key] = row.value; });
-      const merged = { ...DEFAULT_CONFIG, ...cfg };
-      setConfig(merged);
-      if (!cfg.appName) setShowOnboarding(true);
-    } else {
-      setShowOnboarding(true);
-    }
+  const checkUserRole=async()=>{
+    const {data}=await supabase.from('user_roles').select('*, drivers(*)').eq('user_id',user.id).maybeSingle();
+    if(data){setUserRole(data.role);setDriverInfo(data.drivers);}
+    else{setUserRole('admin');}
   };
 
-  const loadAll = async () => {
+  const loadConfig=async()=>{
+    const {data}=await supabase.from('config').select('*').eq('empresa_id',user.id);
+    if(data&&data.length>0){
+      const cfg={};
+      data.forEach(row=>{cfg[row.key]=row.value;});
+      const merged={...DEFAULT_CONFIG,...cfg};
+      setConfig(merged);
+      if(!cfg.appName)setShowOnboarding(true);
+    } else {setShowOnboarding(true);}
+  };
+
+  const loadAll=async()=>{
     setLoading(true);
-    try {
-      const [c, p, m, a, r, v] = await Promise.all([
-        supabase.from('clients').select('*').eq('empresa_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('products').select('*').eq('empresa_id', user.id).order('created_at', { ascending: false }),
-        supabase.from('movements').select('*').eq('empresa_id', user.id).order('date', { ascending: false }),
-        supabase.from('appointments').select('*').eq('empresa_id', user.id).order('date', { ascending: true }),
-        supabase.from('reminders').select('*').eq('empresa_id', user.id),
-        supabase.from('visits').select('*').eq('empresa_id', user.id).order('date', { ascending: false }),
+    try{
+      const [c,p,m,a,r,v]=await Promise.all([
+        supabase.from('clients').select('*').eq('empresa_id',user.id).order('created_at',{ascending:false}),
+        supabase.from('products').select('*').eq('empresa_id',user.id).order('created_at',{ascending:false}),
+        supabase.from('movements').select('*').eq('empresa_id',user.id).order('date',{ascending:false}),
+        supabase.from('appointments').select('*').eq('empresa_id',user.id).order('date',{ascending:true}),
+        supabase.from('reminders').select('*').eq('empresa_id',user.id),
+        supabase.from('visits').select('*').eq('empresa_id',user.id).order('date',{ascending:false}),
       ]);
-      const remindersData = r.data || [];
-      const visitsData = v.data || [];
-      const clientsWithData = (c.data || []).map(cl => ({
-        ...cl, tags: cl.tags || [],
-        reminders: remindersData.filter(rem => rem.client_id === cl.id),
-        visits: visitsData.filter(vis => vis.client_id === cl.id),
-        totalSpent: cl.total_spent || 0, lastVisit: cl.last_visit,
+      const remindersData=r.data||[];
+      const visitsData=v.data||[];
+      const clientsWithData=(c.data||[]).map(cl=>({
+        ...cl,tags:cl.tags||[],
+        reminders:remindersData.filter(rem=>rem.client_id===cl.id),
+        visits:visitsData.filter(vis=>vis.client_id===cl.id),
+        totalSpent:cl.total_spent||0,lastVisit:cl.last_visit,
       }));
       setClients(clientsWithData);
-      setProducts(p.data || []);
-      setMovements(m.data || []);
-      setAppointments((a.data || []).map(ap => ({ ...ap, clientName: ap.client_name })));
-      // Notificaciones
+      setProducts(p.data||[]);
+      setMovements(m.data||[]);
+      setAppointments((a.data||[]).map(ap=>({...ap,clientName:ap.client_name})));
       buildNotifications(clientsWithData);
-    } catch(e) { console.error(e); }
+    }catch(e){console.error(e);}
     setLoading(false);
   };
 
-  const buildNotifications = (cls) => {
-    const notifs = [];
-    const today = new Date();
-    const todayMD = `${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-    cls.forEach(c => {
-      if (c.birthday) {
-        const bMD = c.birthday.slice(5);
-        if (bMD === todayMD) notifs.push({ type: "birthday", msg: `🎂 Hoy es el cumpleaños de ${c.name}!`, color: "#db2777" });
-      }
-      (c.reminders||[]).filter(r=>!r.done&&r.date<=todayStr()).forEach(r => {
-        notifs.push({ type: "reminder", msg: `🔔 ${r.text} — ${c.name}`, color: "#854d0e" });
-      });
+  const buildNotifications=(cls)=>{
+    const notifs=[];
+    const today=new Date();
+    const todayMD=`${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+    cls.forEach(c=>{
+      if(c.birthday){const bMD=c.birthday.slice(5);if(bMD===todayMD)notifs.push({type:"birthday",msg:`🎂 Hoy es el cumpleaños de ${c.name}!`,color:"#db2777"});}
+      (c.reminders||[]).filter(r=>!r.done&&r.date<=todayStr()).forEach(r=>{notifs.push({type:"reminder",msg:`🔔 ${r.text} — ${c.name}`,color:"#854d0e"});});
     });
     setNotifications(notifs);
   };
 
-  const handleLogout = async () => {
+  const handleLogout=async()=>{
     await supabase.auth.signOut();
-    setUser(null);
-    setClients([]); setProducts([]); setMovements([]); setAppointments([]);
+    setUser(null);setUserRole(null);setDriverInfo(null);
+    setClients([]);setProducts([]);setMovements([]);setAppointments([]);
     setConfig(DEFAULT_CONFIG);
   };
 
-  const saveConfigKey = async (key, value) => {
-    await supabase.from('config').upsert({ empresa_id: user.id, key, value }, { onConflict: 'empresa_id,key' });
+  const saveConfigKey=async(key,value)=>{
+    await supabase.from('config').upsert({empresa_id:user.id,key,value},{onConflict:'empresa_id,key'});
   };
 
-  if (authLoading) return (
+  if(authLoading)return(
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,marginBottom:8}}>🏪 LocalApp</div>
@@ -233,7 +232,12 @@ export default function App() {
     </div>
   );
 
-  if (!user) return <Login onLogin={setUser} />;
+  if(!user)return <Login onLogin={setUser}/>;
+
+  // Si es chofer, mostrar solo parte diario
+  if(userRole==='chofer'&&driverInfo){
+    return <ParteDiarioChofer user={user} empresaId={driverInfo.empresa_id} driverInfo={driverInfo} config={config} onLogout={handleLogout}/>;
+  }
 
   const fmt=(n)=>n===0?"—":`${config.moneda}${Number(n).toLocaleString("es-AR")}`;
   const tColor=(t)=>tagColor(t,config.clientTags);
@@ -244,19 +248,17 @@ export default function App() {
   const totalEgresos=movements.filter(m=>m.type==="egreso").reduce((a,m)=>a+Number(m.amount),0);
   const saldo=totalIngresos-totalEgresos;
 
-  const activeModules = config.modules || DEFAULT_CONFIG.modules;
-  const NAV = ALL_MODULES.filter(m => activeModules.includes(m.key));
-
+  const activeModules=config.modules||DEFAULT_CONFIG.modules;
+  const NAV=ALL_MODULES.filter(m=>activeModules.includes(m.key));
   const changeTab=(k)=>{setTab(k);setSelClient(null);};
 
-  // Global search results
-  const gResults = globalSearch.length > 1 ? [
+  const gResults=globalSearch.length>1?[
     ...clients.filter(c=>c.name.toLowerCase().includes(globalSearch.toLowerCase())).slice(0,4).map(c=>({type:"cliente",label:c.name,sub:c.phone||"",action:()=>{changeTab("clientes");setSelClient(c);setShowGlobalSearch(false);setGlobalSearch("");}})),
     ...products.filter(p=>p.name.toLowerCase().includes(globalSearch.toLowerCase())).slice(0,3).map(p=>({type:"producto",label:p.name,sub:fmt(p.price),action:()=>{changeTab("stock");setShowGlobalSearch(false);setGlobalSearch("");}})),
     ...movements.filter(m=>(m.description||"").toLowerCase().includes(globalSearch.toLowerCase())).slice(0,3).map(m=>({type:"movimiento",label:m.description,sub:fmt(m.amount),action:()=>{changeTab("caja");setShowGlobalSearch(false);setGlobalSearch("");}})),
-  ] : [];
+  ]:[];
 
-  if(loading) return (
+  if(loading)return(
     <div style={{height:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:config.darkMode?"#0f0f10":"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:"'Syne',sans-serif",fontSize:28,fontWeight:800,marginBottom:8,color:config.darkMode?"#fff":"#18181b"}}>{config.appIcon} {config.appName}</div>
@@ -265,21 +267,13 @@ export default function App() {
     </div>
   );
 
-  return (
+  return(
     <div style={{display:"flex",height:"100vh",background:config.darkMode?"#0f0f10":"#f5f3ef",fontFamily:"'Instrument Sans',sans-serif",overflow:"hidden"}}>
-      <style>{makeStyles(config.accentColor, config.darkMode)}</style>
+      <style>{makeStyles(config.accentColor,config.darkMode)}</style>
 
-      {/* Onboarding */}
-      {showOnboarding && <OnboardingModal config={config} onSave={async(cfg)=>{
-        setConfig(cfg);
-        for(const [key,value] of Object.entries(cfg)){
-          await saveConfigKey(key, value);
-        }
-        setShowOnboarding(false);
-      }}/>}
+      {showOnboarding&&<OnboardingModal config={config} onSave={async(cfg)=>{setConfig(cfg);for(const[key,value]of Object.entries(cfg)){await saveConfigKey(key,value);}setShowOnboarding(false);}}/>}
 
-      {/* Notificaciones */}
-      {showNotifications && notifications.length > 0 && (
+      {showNotifications&&notifications.length>0&&(
         <div className="modal-bg" onClick={()=>setShowNotifications(false)}>
           <div className="modal" style={{maxWidth:400}} onClick={e=>e.stopPropagation()}>
             <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>Notificaciones</div>
@@ -291,8 +285,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Búsqueda global */}
-      {showGlobalSearch && (
+      {showGlobalSearch&&(
         <div className="modal-bg" onClick={()=>{setShowGlobalSearch(false);setGlobalSearch("");}}>
           <div className="modal" style={{maxWidth:500,padding:16}} onClick={e=>e.stopPropagation()}>
             <input className="field" placeholder="🔍 Buscar clientes, productos, movimientos..." value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)} autoFocus style={{marginBottom:12}}/>
@@ -302,13 +295,12 @@ export default function App() {
                 <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{r.label}</div><div style={{fontSize:11,color:"#aaa"}}>{r.sub}</div></div>
               </div>
             ))}
-            {globalSearch.length > 1 && gResults.length === 0 && <div style={{textAlign:"center",color:"#aaa",fontSize:13,padding:16}}>Sin resultados</div>}
+            {globalSearch.length>1&&gResults.length===0&&<div style={{textAlign:"center",color:"#aaa",fontSize:13,padding:16}}>Sin resultados</div>}
           </div>
         </div>
       )}
 
-      {/* Sidebar desktop */}
-      {!isMobile && (
+      {!isMobile&&(
         <div style={{width:210,flexShrink:0,background:config.darkMode?"#111113":"#fff",borderRight:`1px solid ${config.darkMode?"#2a2a2e":"#e8e4dc"}`,display:"flex",flexDirection:"column",padding:"18px 10px"}}>
           <div style={{paddingLeft:6,marginBottom:20,display:"flex",alignItems:"center",gap:10}}>
             <div style={{width:36,height:36,background:config.accentColor,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{config.appIcon}</div>
@@ -317,11 +309,10 @@ export default function App() {
               <div style={{fontSize:11,color:"#aaa",marginTop:2}}>gestión integral</div>
             </div>
           </div>
-          {/* Búsqueda global */}
           <button onClick={()=>setShowGlobalSearch(true)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:9,background:config.darkMode?"#1a1a1e":"#f5f3ef",border:`1px solid ${config.darkMode?"#333":"#e2dfd8"}`,cursor:"pointer",fontSize:12,color:"#888",marginBottom:12,fontFamily:"inherit",width:"100%"}}>🔍 Buscar...</button>
           <div style={{display:"flex",flexDirection:"column",gap:3}}>
             {NAV.map(({key,icon,label})=>{
-              const badge = key==="agenda"?todayAppts:key==="stock"?lowStock.length:0;
+              const badge=key==="agenda"?todayAppts:key==="stock"?lowStock.length:0;
               return(
                 <button key={key} className={`nav-btn${tab===key?" on":""}`} onClick={()=>changeTab(key)}>
                   <span style={{fontSize:16,fontFamily:"monospace",flexShrink:0}}>{icon}</span>
@@ -341,7 +332,7 @@ export default function App() {
       )}
 
       <div style={{flex:1,overflow:"auto",display:"flex",flexDirection:"column",paddingBottom:isMobile?64:0}}>
-        {isMobile && (
+        {isMobile&&(
           <div style={{background:config.darkMode?"#111113":"#fff",borderBottom:`1px solid ${config.darkMode?"#2a2a2e":"#e8e4dc"}`,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,position:"sticky",top:0,zIndex:50}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
               <div style={{width:30,height:30,background:config.accentColor,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>{config.appIcon}</div>
@@ -356,23 +347,23 @@ export default function App() {
           </div>
         )}
 
-        {tab==="dashboard" && <Dashboard clients={clients} products={products} movements={movements} appointments={appointments} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} lowStock={lowStock} setTab={changeTab} fmt={fmt} config={config} tColor={tColor} isMobile={isMobile}/>}
-        {tab==="clientes" && <Clientes clients={clients} setClients={setClients} products={products} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
-        {tab==="agenda" && <Agenda appointments={appointments} clients={clients} config={config} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
-        {tab==="stock" && <Stock products={products} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
-        {tab==="caja" && <Caja movements={movements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
-        {tab==="servicios" && <Servicios clients={clients} config={config} userId={user.id}/>}
-        {tab==="nomina" && <Nomina config={config} userId={user.id}/>}
-       {tab==="prestamos" && <Prestamos clients={clients} config={config} userId={user.id}/>}
-        {tab==="transporte" && <Transporte clients={clients} config={config} userId={user.id}/>}
-        {tab==="proformas" && <Proformas clients={clients} products={products} config={config} userId={user.id}/>}
-        {tab==="config" && <Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id} saveConfigKey={saveConfigKey}/>}
+        {tab==="dashboard"&&<Dashboard clients={clients} products={products} movements={movements} appointments={appointments} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} lowStock={lowStock} setTab={changeTab} fmt={fmt} config={config} tColor={tColor} isMobile={isMobile}/>}
+        {tab==="clientes"&&<Clientes clients={clients} products={products} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="agenda"&&<Agenda appointments={appointments} clients={clients} config={config} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="stock"&&<Stock products={products} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="caja"&&<Caja movements={movements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="servicios"&&<Servicios clients={clients} config={config} userId={user.id}/>}
+        {tab==="nomina"&&<Nomina config={config} userId={user.id}/>}
+        {tab==="transporte"&&<Transporte clients={clients} config={config} userId={user.id}/>}
+        {tab==="prestamos"&&<Prestamos clients={clients} config={config} userId={user.id}/>}
+        {tab==="proformas"&&<Proformas clients={clients} products={products} config={config} userId={user.id}/>}
+        {tab==="config"&&<Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id} saveConfigKey={saveConfigKey}/>}
       </div>
 
-      {isMobile && (
+      {isMobile&&(
         <div className="mobile-nav">
           {NAV.slice(0,6).map(({key,icon,label})=>{
-            const badge = key==="agenda"?todayAppts:key==="stock"?lowStock.length:0;
+            const badge=key==="agenda"?todayAppts:key==="stock"?lowStock.length:0;
             return(
               <button key={key} className="mobile-nav-btn" onClick={()=>changeTab(key)} style={{color:tab===key?config.accentColor:"#888"}}>
                 <span style={{fontSize:20,lineHeight:1}}>{icon}</span>
@@ -387,12 +378,11 @@ export default function App() {
   );
 }
 
-// ─── ONBOARDING ───────────────────────────────────────────────────
-function OnboardingModal({ config, onSave }) {
-  const [form, setForm] = useState({ appName: config.appName==="LocalApp"?"":config.appName, appIcon: config.appIcon||"🏪", moneda: config.moneda||"$", accentColor: config.accentColor||"#18181b" });
-  const [saving, setSaving] = useState(false);
-  const set = (k,v) => setForm(p=>({...p,[k]:v}));
-  return (
+function OnboardingModal({config,onSave}){
+  const [form,setForm]=useState({appName:config.appName==="LocalApp"?"":config.appName,appIcon:config.appIcon||"🏪",moneda:config.moneda||"$",accentColor:config.accentColor||"#18181b"});
+  const [saving,setSaving]=useState(false);
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  return(
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,backdropFilter:"blur(6px)"}}>
       <div style={{background:"#fff",borderRadius:24,padding:32,width:"calc(100% - 32px)",maxWidth:420,boxShadow:"0 32px 80px rgba(0,0,0,.3)"}}>
         <div style={{textAlign:"center",marginBottom:24}}>
@@ -403,7 +393,7 @@ function OnboardingModal({ config, onSave }) {
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
           <div>
             <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Nombre del negocio *</label>
-            <input className="field" placeholder="Ej: Peluquería María" value={form.appName} onChange={e=>set("appName",e.target.value)} autoFocus />
+            <input className="field" placeholder="Ej: Peluquería María" value={form.appName} onChange={e=>set("appName",e.target.value)} autoFocus/>
           </div>
           <div>
             <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:6}}>Ícono</label>
@@ -414,17 +404,12 @@ function OnboardingModal({ config, onSave }) {
             <input className="field" placeholder="$" value={form.moneda} onChange={e=>set("moneda",e.target.value)} style={{width:80}}/>
           </div>
         </div>
-        <button className="btn btn-dark" style={{width:"100%",marginTop:20,padding:"12px"}} disabled={!form.appName||saving} onClick={async()=>{
-          setSaving(true);
-          await onSave({...config,...form});
-          setSaving(false);
-        }}>{saving?"Guardando...":"Empezar 🚀"}</button>
+        <button className="btn btn-dark" style={{width:"100%",marginTop:20,padding:"12px"}} disabled={!form.appName||saving} onClick={async()=>{setSaving(true);await onSave({...config,...form});setSaving(false);}}>{saving?"Guardando...":"Empezar 🚀"}</button>
       </div>
     </div>
   );
 }
 
-// ─── DASHBOARD ────────────────────────────────────────────────────
 function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,totalEgresos,lowStock,setTab,fmt,config,tColor,isMobile}){
   const recentMovs=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).slice(0,5);
   const topClients=[...clients].sort((a,b)=>b.totalSpent-a.totalSpent).slice(0,4);
@@ -438,18 +423,15 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
     const eg=movements.filter(m=>m.type==="egreso"&&(m.date||"").startsWith(key)).reduce((a,m)=>a+Number(m.amount),0);
     return{label,Ingresos:ing,Egresos:eg};
   });
-
-  // Presupuesto mensual
   const thisMonth=`${new Date().getFullYear()}-${pad(new Date().getMonth()+1)}`;
   const ingMes=movements.filter(m=>m.type==="ingreso"&&(m.date||"").startsWith(thisMonth)).reduce((a,m)=>a+Number(m.amount),0);
   const presupuesto=Number(config.presupuestoMensual||0);
   const pct=presupuesto>0?Math.min(100,Math.round(ingMes/presupuesto*100)):0;
-
   const stats=[
     {label:"Saldo",value:fmt(saldo),color:saldo>=0?"#166534":"#7f1d1d"},
     {label:"Ingresos",value:fmt(totalIngresos),color:"#166534"},
     {label:"Egresos",value:fmt(totalEgresos),color:"#7f1d1d"},
-    {label:"Clientes",value:clients.length,color:"#18181b"},
+    {label:"Clientes",value:clients.length},
     {label:"Turnos hoy",value:todayAppts.length,color:"#6366f1"},
     {label:"Stock bajo",value:lowStock.length,color:lowStock.length>0?"#d97706":"#18181b"},
   ];
@@ -458,8 +440,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
       {!isMobile&&<div style={{fontFamily:"'Syne',sans-serif",fontSize:22,fontWeight:800,letterSpacing:"-0.03em",marginBottom:4}}>Dashboard</div>}
       {!isMobile&&<div style={{color:"#888",fontSize:13,marginBottom:16}}>Bienvenido a {config.appName}</div>}
       {lowStock.length>0&&<div className="alert-banner"><span>⚠️</span><span style={{fontWeight:700,fontSize:13}}>Stock bajo: {lowStock.map(p=>p.name).join(", ")}</span><button className="btn btn-outline btn-sm" style={{marginLeft:"auto"}} onClick={()=>setTab("stock")}>Ver</button></div>}
-
-      {/* Presupuesto mensual */}
       {presupuesto>0&&(
         <div className="card" style={{padding:"12px 16px",marginBottom:14}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -471,12 +451,11 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
           </div>
         </div>
       )}
-
       <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(3,1fr)":"repeat(6,1fr)",gap:8,marginBottom:16}}>
         {stats.map((s,i)=>(
           <div key={i} className="stat" style={{textAlign:"center",padding:isMobile?"10px 6px":"12px 14px"}}>
             <div style={{fontSize:9,color:"#aaa",fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:3,lineHeight:1.2}}>{s.label}</div>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:isMobile?15:20,fontWeight:800,color:s.color,lineHeight:1}}>{s.value}</div>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:isMobile?15:20,fontWeight:800,color:s.color||"#18181b",lineHeight:1}}>{s.value}</div>
           </div>
         ))}
       </div>
@@ -550,7 +529,6 @@ function Dashboard({clients,products,movements,appointments,saldo,totalIngresos,
   );
 }
 
-// ─── CLIENTES ─────────────────────────────────────────────────────
 function Clientes({clients,products,movements,selClient,setSelClient,config,fmt,tColor,reload,isMobile,userId}){
   const [search,setSearch]=useState("");
   const [filterTag,setFilterTag]=useState("Todos");
@@ -565,72 +543,44 @@ function Clientes({clients,products,movements,selClient,setSelClient,config,fmt,
   const [editNote,setEditNote]=useState(false);
   const [noteVal,setNoteVal]=useState("");
   const [saving,setSaving]=useState(false);
-
   useEffect(()=>{if(selClient){setNoteVal(selClient.notes||"");setEditNote(false);}},[selClient]);
-
   const allTags=["Todos",...config.clientTags];
   const filtered=clients.filter(c=>{
     const ms=c.name.toLowerCase().includes(search.toLowerCase())||(c.phone||"").includes(search);
     const mt=filterTag==="Todos"||(c.tags||[]).includes(filterTag);
     return ms&&mt;
   });
-
   const addClient=async()=>{
     if(!newC.name)return;setSaving(true);
     const tags=newC.tags?newC.tags.split(",").map(t=>t.trim()):[];
-    await supabase.from('clients').insert({empresa_id:userId,name:newC.name,phone:newC.phone,email:newC.email,tags,notes:newC.notes,birthday:newC.birthday||null,debt:Number(newC.debt)||0,total_spent:0}).select().single();
-    await reload();
-    setSaving(false);setShowNew(false);setNewC({name:"",phone:"",email:"",tags:"",notes:"",birthday:"",debt:0});
+    await supabase.from('clients').insert({empresa_id:userId,name:newC.name,phone:newC.phone,email:newC.email,tags,notes:newC.notes,birthday:newC.birthday||null,debt:Number(newC.debt)||0,total_spent:0});
+    await reload();setSaving(false);setShowNew(false);setNewC({name:"",phone:"",email:"",tags:"",notes:"",birthday:"",debt:0});
   };
-
-  const saveNote=async()=>{
-    if(!selClient)return;
-    await supabase.from('clients').update({notes:noteVal}).eq('id',selClient.id);
-    await reload();setEditNote(false);
-  };
-
-  const addRem=async()=>{
-    if(!newRem.text||!newRem.date||!selClient)return;
-    await supabase.from('reminders').insert({empresa_id:userId,client_id:selClient.id,text:newRem.text,date:newRem.date,done:false});
-    await reload();setNewRem({text:"",date:""});setShowRem(false);
-  };
-
+  const saveNote=async()=>{if(!selClient)return;await supabase.from('clients').update({notes:noteVal}).eq('id',selClient.id);await reload();setEditNote(false);};
+  const addRem=async()=>{if(!newRem.text||!newRem.date||!selClient)return;await supabase.from('reminders').insert({empresa_id:userId,client_id:selClient.id,text:newRem.text,date:newRem.date,done:false});await reload();setNewRem({text:"",date:""});setShowRem(false);};
   const toggleRem=async(rem)=>{await supabase.from('reminders').update({done:!rem.done}).eq('id',rem.id);await reload();};
   const deleteRem=async(remId)=>{await supabase.from('reminders').delete().eq('id',remId);await reload();};
   const saleTotal=saleItems.reduce((a,si)=>{const p=products.find(p=>p.id===Number(si.productId));return a+(p?p.price*si.qty:0);},0);
-
   const addSale=async()=>{
     const valid=saleItems.filter(si=>si.productId&&si.qty>0);if(!valid.length||!selClient)return;
-    setSaving(true);
-    const desc=saleDesc||`Venta a ${selClient.name}`;
+    setSaving(true);const desc=saleDesc||`Venta a ${selClient.name}`;
     await supabase.from('visits').insert({empresa_id:userId,client_id:selClient.id,date:saleDate,description:desc,amount:saleTotal});
     await supabase.from('clients').update({total_spent:(selClient.totalSpent||0)+saleTotal,last_visit:saleDate}).eq('id',selClient.id);
     await supabase.from('movements').insert({empresa_id:userId,type:'ingreso',category:config.catIngreso[0],description:desc,amount:saleTotal,date:saleDate,client_id:selClient.id});
     await reload();setSaleItems([{productId:"",qty:1}]);setSaleDesc("");setSaleDate(todayStr());setShowSale(false);setSaving(false);
   };
-
   const exportClientePDF=(c)=>{
     const doc=new jsPDF();
     doc.setFontSize(20);doc.setFont("helvetica","bold");doc.text(c.name,20,25);
-    doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);
-    doc.text(`Ficha de cliente — ${fmtDate(todayStr())}`,20,33);
-    doc.setDrawColor(200);doc.line(20,38,190,38);
-    doc.setTextColor(0);doc.setFontSize(11);
-    const info=[["Teléfono",c.phone||"—"],["Email",c.email||"—"],["Etiquetas",(c.tags||[]).join(", ")||"—"],["Total gastado",fmt(c.totalSpent||0)],["Última visita",fmtDate(c.lastVisit)],["Notas",c.notes||"—"]];
-    info.forEach(([l,v],i)=>{
-      doc.setFont("helvetica","bold");doc.text(l+": ",20,48+i*10);
-      doc.setFont("helvetica","normal");doc.text(v,70,48+i*10);
-    });
-    if((c.visits||[]).length>0){
-      autoTable(doc,{startY:110,head:[["Fecha","Descripción","Monto"]],body:c.visits.slice(0,10).map(v=>[fmtDate(v.date),v.description||"—",fmt(v.amount)]),styles:{fontSize:9},headStyles:{fillColor:[24,24,27],textColor:255}});
-    }
+    doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);doc.text(`Ficha de cliente — ${fmtDate(todayStr())}`,20,33);
+    doc.setDrawColor(200);doc.line(20,38,190,38);doc.setTextColor(0);doc.setFontSize(11);
+    const info=[["Teléfono",c.phone||"—"],["Email",c.email||"—"],["Total gastado",fmt(c.totalSpent||0)],["Última visita",fmtDate(c.lastVisit)]];
+    info.forEach(([l,v],i)=>{doc.setFont("helvetica","bold");doc.text(l+": ",20,48+i*10);doc.setFont("helvetica","normal");doc.text(v,70,48+i*10);});
+    if((c.visits||[]).length>0){autoTable(doc,{startY:110,head:[["Fecha","Descripción","Monto"]],body:c.visits.slice(0,10).map(v=>[fmtDate(v.date),v.description||"—",fmt(v.amount)]),styles:{fontSize:9},headStyles:{fillColor:[24,24,27],textColor:255}});}
     doc.save(`cliente-${c.name.replace(/\s/g,"-")}.pdf`);
   };
-
   useEffect(()=>{if(selClient){const updated=clients.find(c=>c.id===selClient.id);if(updated)setSelClient(updated);}},[clients]);
-
   const todayMD=`${pad(new Date().getMonth()+1)}-${pad(new Date().getDate())}`;
-
   if(selClient){
     const sc=clients.find(c=>c.id===selClient.id)||selClient;
     const isBday=sc.birthday&&sc.birthday.slice(5)===todayMD;
@@ -716,7 +666,6 @@ function Clientes({clients,products,movements,selClient,setSelClient,config,fmt,
       </div>
     );
   }
-
   return(
     <div className="page">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
@@ -767,7 +716,6 @@ function Clientes({clients,products,movements,selClient,setSelClient,config,fmt,
   );
 }
 
-// ─── AGENDA ───────────────────────────────────────────────────────
 function Agenda({appointments,clients,config,reload,isMobile,userId}){
   const [viewMode,setViewMode]=useState(isMobile?"list":"week");
   const [curDate,setCurDate]=useState(todayDate());
@@ -778,29 +726,24 @@ function Agenda({appointments,clients,config,reload,isMobile,userId}){
   const [qHour,setQHour]=useState(null);
   const [desde,setDesde]=useState("");
   const [hasta,setHasta]=useState("");
-
   const weekDates=getWeekDates(curDate);
   const go=(dir)=>{const d=new Date(curDate);if(viewMode==="week")d.setDate(d.getDate()+dir*7);else d.setDate(d.getDate()+dir);setCurDate(d);};
   const apptsByDate=(d)=>appointments.filter(a=>a.date===dateKey(d));
   const openNew=(date,hour)=>{setEditAppt(null);setQDate(date||todayStr());setQHour(hour||9);setShowModal(true);};
   const openEdit=(a)=>{setEditAppt(a);setSelAppt(null);setShowModal(true);};
-
   const saveAppt=async(form)=>{
     if(form.id){await supabase.from('appointments').update({client_id:form.clientId||null,client_name:form.clientName,service:form.service,date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,color:form.color,notes:form.notes,status:form.status}).eq('id',form.id);}
     else{await supabase.from('appointments').insert({empresa_id:userId,client_id:form.clientId||null,client_name:form.clientName,service:form.service,date:form.date,hour:form.hour,minute:form.minute||0,duration:form.duration,color:form.color,notes:form.notes,status:form.status||'confirmado'});}
     await reload();setShowModal(false);
   };
-
   const delAppt=async(id)=>{await supabase.from('appointments').delete().eq('id',id);await reload();setSelAppt(null);setShowModal(false);};
   const completeAppt=async(id)=>{await supabase.from('appointments').update({status:'completado'}).eq('id',id);await reload();setSelAppt(null);};
-
   const titleStr=viewMode==="week"?`${MONTHS[weekDates[0].getMonth()].slice(0,3)} ${weekDates[0].getFullYear()}`:`${DAYS[curDate.getDay()]} ${curDate.getDate()} ${MONTHS[curDate.getMonth()].slice(0,3)}`;
   const todayAppts=appointments.filter(a=>a.date===todayStr()).sort((a,b)=>a.hour-b.hour);
   const upcoming=appointments.filter(a=>a.date>=todayStr()&&a.status!=="cancelado").sort((a,b)=>(a.date||"").localeCompare(b.date||"")||a.hour-b.hour);
-
   return(
     <div style={{display:"flex",flexDirection:"column",height:"100%",overflow:"hidden"}}>
-      <div style={{background:"var(--card,#fff)",borderBottom:"1px solid #e8e4dc",padding:"10px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
+      <div style={{background:"#fff",borderBottom:"1px solid #e8e4dc",padding:"10px 16px",display:"flex",alignItems:"center",gap:8,flexShrink:0,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
           <button className="btn-icon" onClick={()=>go(-1)}>‹</button>
           <div style={{fontFamily:"'Syne',sans-serif",fontWeight:700,fontSize:13,minWidth:120,textAlign:"center"}}>{titleStr}</div>
@@ -812,7 +755,7 @@ function Agenda({appointments,clients,config,reload,isMobile,userId}){
             <button key={v} onClick={()=>setViewMode(v)} style={{padding:"4px 10px",borderRadius:6,cursor:"pointer",fontSize:12,fontWeight:600,border:"none",background:viewMode===v?"#fff":"transparent",color:viewMode===v?"#18181b":"#888",fontFamily:"inherit"}}>{l}</button>
           ))}
         </div>
-        {!isMobile&&<><input type="date" className="field" style={{width:130,padding:"5px 8px",fontSize:12}} value={desde} onChange={e=>setDesde(e.target.value)} placeholder="Desde"/><input type="date" className="field" style={{width:130,padding:"5px 8px",fontSize:12}} value={hasta} onChange={e=>setHasta(e.target.value)} placeholder="Hasta"/><button className="btn btn-outline btn-sm" onClick={()=>exportAgenda(appointments,desde,hasta)}>📊 Excel</button></>}
+        {!isMobile&&<><input type="date" className="field" style={{width:130,padding:"5px 8px",fontSize:12}} value={desde} onChange={e=>setDesde(e.target.value)}/><input type="date" className="field" style={{width:130,padding:"5px 8px",fontSize:12}} value={hasta} onChange={e=>setHasta(e.target.value)}/><button className="btn btn-outline btn-sm" onClick={()=>exportAgenda(appointments,desde,hasta)}>📊 Excel</button></>}
         <button className="btn btn-dark btn-sm" style={{marginLeft:"auto"}} onClick={()=>openNew()}>+ Turno</button>
       </div>
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>
@@ -830,24 +773,16 @@ function Agenda({appointments,clients,config,reload,isMobile,userId}){
             </div>
             <div style={{display:"grid",gridTemplateColumns:"48px repeat(7,1fr)",flex:1}}>
               <div>{HOURS.map(h=><div key={h} className="hour-cell" style={{height:52,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:4,paddingTop:3}}><span style={{fontSize:9.5,color:"#bbb"}}>{fmtHour(h)}</span></div>)}</div>
-              {weekDates.map((d,di)=>{
-                const isT=isSameDay(d,todayDate());
-                return(
-                  <div key={di} style={{borderLeft:"1px solid #f0ede6",position:"relative",background:isT?"#fafafe":"transparent"}}>
-                    {HOURS.map(h=><div key={h} className="hour-cell" style={{height:52,cursor:"pointer"}} onClick={()=>openNew(dateKey(d),h)} onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.04)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>)}
-                    {apptsByDate(d).map(a=>{
-                      const top=((a.hour-8)*60+(a.minute||0))*52/60;
-                      const ht=Math.max(a.duration*52/60-3,18);
-                      const isCan=a.status==="cancelado";
-                      return<div key={a.id} className="appt-block" style={{top,left:2,right:2,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
-                        <div style={{fontSize:9,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div>
-                        <div style={{fontSize:10,fontWeight:600,color:"#18181b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div>
-                      </div>;
-                    })}
-                    {isT&&(()=>{const now=new Date();const mins=((now.getHours()-8)*60+now.getMinutes())*52/60;if(mins<0)return null;return<div style={{position:"absolute",top:mins,left:0,right:0,height:2,background:"#6366f1",zIndex:5,pointerEvents:"none"}}><div style={{width:6,height:6,borderRadius:"50%",background:"#6366f1",position:"absolute",left:-3,top:-2}}/></div>;})()}
-                  </div>
-                );
-              })}
+              {weekDates.map((d,di)=>{const isT=isSameDay(d,todayDate());return(
+                <div key={di} style={{borderLeft:"1px solid #f0ede6",position:"relative",background:isT?"#fafafe":"transparent"}}>
+                  {HOURS.map(h=><div key={h} className="hour-cell" style={{height:52,cursor:"pointer"}} onClick={()=>openNew(dateKey(d),h)} onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.04)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>)}
+                  {apptsByDate(d).map(a=>{const top=((a.hour-8)*60+(a.minute||0))*52/60;const ht=Math.max(a.duration*52/60-3,18);const isCan=a.status==="cancelado";return<div key={a.id} className="appt-block" style={{top,left:2,right:2,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
+                    <div style={{fontSize:9,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div>
+                    <div style={{fontSize:10,fontWeight:600,color:"#18181b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div>
+                  </div>;})}
+                  {isT&&(()=>{const now=new Date();const mins=((now.getHours()-8)*60+now.getMinutes())*52/60;if(mins<0)return null;return<div style={{position:"absolute",top:mins,left:0,right:0,height:2,background:"#6366f1",zIndex:5,pointerEvents:"none"}}><div style={{width:6,height:6,borderRadius:"50%",background:"#6366f1",position:"absolute",left:-3,top:-2}}/></div>;})()}
+                </div>
+              );})}
             </div>
           </div>
         )}
@@ -857,17 +792,11 @@ function Agenda({appointments,clients,config,reload,isMobile,userId}){
               <div>{HOURS.map(h=><div key={h} className="hour-cell" style={{height:isMobile?56:70,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",paddingRight:6,paddingTop:3}}><span style={{fontSize:10,color:"#bbb"}}>{fmtHour(h)}</span></div>)}</div>
               <div style={{position:"relative",borderLeft:"1px solid #f0ede6"}}>
                 {HOURS.map(h=><div key={h} className="hour-cell" style={{height:isMobile?56:70,cursor:"pointer"}} onClick={()=>openNew(dateKey(curDate),h)} onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,.04)"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}/>)}
-                {apptsByDate(curDate).map(a=>{
-                  const hPx=isMobile?56:70;
-                  const top=((a.hour-8)*60+(a.minute||0))*hPx/60;
-                  const ht=Math.max(a.duration*hPx/60-4,28);
-                  const isCan=a.status==="cancelado";
-                  return<div key={a.id} className="appt-block" style={{top,left:6,right:6,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{fontSize:11,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div><span style={{fontSize:9.5,fontWeight:700,padding:"1px 6px",borderRadius:10,background:STATUS_STYLES[a.status]?.bg,color:STATUS_STYLES[a.status]?.text}}>{STATUS_STYLES[a.status]?.label}</span></div>
-                    <div style={{fontSize:13,fontWeight:700,color:"#18181b",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div>
-                    {ht>40&&<div style={{fontSize:11,color:"#666",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.service}</div>}
-                  </div>;
-                })}
+                {apptsByDate(curDate).map(a=>{const hPx=isMobile?56:70;const top=((a.hour-8)*60+(a.minute||0))*hPx/60;const ht=Math.max(a.duration*hPx/60-4,28);const isCan=a.status==="cancelado";return<div key={a.id} className="appt-block" style={{top,left:6,right:6,height:ht,background:isCan?"#f5f5f5":a.color+"22",borderLeftColor:isCan?"#ccc":a.color,opacity:isCan?.55:1}} onClick={e=>{e.stopPropagation();setSelAppt(a);}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{fontSize:11,fontWeight:700,color:isCan?"#aaa":a.color}}>{fmtHour(a.hour,a.minute||0)}</div><span style={{fontSize:9.5,fontWeight:700,padding:"1px 6px",borderRadius:10,background:STATUS_STYLES[a.status]?.bg,color:STATUS_STYLES[a.status]?.text}}>{STATUS_STYLES[a.status]?.label}</span></div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#18181b",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.client_name||a.clientName}</div>
+                  {ht>40&&<div style={{fontSize:11,color:"#666",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.service}</div>}
+                </div>;})}
               </div>
             </div>
           </div>
@@ -972,7 +901,6 @@ function ApptModal({appt,clients,services,defaultDate,defaultHour,onSave,onDelet
   </div></div>;
 }
 
-// ─── STOCK ────────────────────────────────────────────────────────
 function Stock({products,lowStock,fmt,reload,isMobile,userId}){
   const [showNew,setShowNew]=useState(false);
   const [showAdj,setShowAdj]=useState(null);
@@ -982,22 +910,12 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
   const [adjQty,setAdjQty]=useState("");
   const [adjType,setAdjType]=useState("add");
   const [saving,setSaving]=useState(false);
-
   const cats=["Todos",...Array.from(new Set(products.map(p=>p.category).filter(Boolean)))];
   const filtered=products.filter(p=>(p.name.toLowerCase().includes(search.toLowerCase())||(p.sku||"").toLowerCase().includes(search.toLowerCase()))&&(filterCat==="Todos"||p.category===filterCat));
-
   const addP=async()=>{if(!newP.name||!newP.price)return;setSaving(true);await supabase.from('products').insert({empresa_id:userId,name:newP.name,sku:newP.sku,category:newP.category,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,min_stock:Number(newP.minStock)||5});await reload();setSaving(false);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);};
   const applyAdj=async()=>{const q=Number(adjQty);if(!q||!showAdj)return;const newStock=Math.max(0,adjType==="add"?showAdj.stock+q:showAdj.stock-q);await supabase.from('products').update({stock:newStock}).eq('id',showAdj.id);await reload();setShowAdj(null);setAdjQty("");setAdjType("add");};
   const st=(p)=>p.stock===0?{label:"Sin stock",cls:"pill-red"}:p.stock<=p.min_stock?{label:"Bajo",cls:"pill-yellow"}:{label:"OK",cls:"pill-green"};
-
-  const exportStockPDF=()=>{
-    const doc=new jsPDF();
-    doc.setFontSize(18);doc.setFont("helvetica","bold");doc.text("Inventario de Stock",20,25);
-    doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);doc.text(`Generado: ${fmtDate(todayStr())}`,20,33);
-    autoTable(doc,{startY:40,head:[["Producto","SKU","Cat.","Precio","Stock","Mín.","Estado"]],body:filtered.map(p=>[p.name,p.sku||"—",p.category||"—",fmt(p.price),p.stock,p.min_stock,p.stock===0?"Sin stock":p.stock<=p.min_stock?"Bajo":"OK"]),styles:{fontSize:9},headStyles:{fillColor:[24,24,27],textColor:255}});
-    doc.save("stock.pdf");
-  };
-
+  const exportStockPDF=()=>{const doc=new jsPDF();doc.setFontSize(18);doc.setFont("helvetica","bold");doc.text("Inventario de Stock",20,25);doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);doc.text(`Generado: ${fmtDate(todayStr())}`,20,33);autoTable(doc,{startY:40,head:[["Producto","SKU","Cat.","Precio","Stock","Estado"]],body:filtered.map(p=>[p.name,p.sku||"—",p.category||"—",fmt(p.price),p.stock,p.stock===0?"Sin stock":p.stock<=p.min_stock?"Bajo":"OK"]),styles:{fontSize:9},headStyles:{fillColor:[24,24,27],textColor:255}});doc.save("stock.pdf");};
   return(
     <div className="page">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
@@ -1079,7 +997,6 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
   );
 }
 
-// ─── CAJA ─────────────────────────────────────────────────────────
 function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,reload,isMobile,userId}){
   const [showNew,setShowNew]=useState(false);
   const [filterType,setFilterType]=useState("todos");
@@ -1088,7 +1005,6 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
   const [hasta,setHasta]=useState("");
   const [newM,setNewM]=useState({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});
   const [saving,setSaving]=useState(false);
-
   const allCats=["Todos",...config.catIngreso,...config.catEgreso];
   const filtered=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).filter(m=>{
     if(filterType!=="todos"&&m.type!==filterType)return false;
@@ -1097,29 +1013,22 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
     if(hasta&&m.date>hasta)return false;
     return true;
   });
-
   const addM=async()=>{if(!newM.description||!newM.amount||!newM.date)return;setSaving(true);await supabase.from('movements').insert({empresa_id:userId,type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);};
   const deleteM=async(id)=>{await supabase.from('movements').delete().eq('id',id);await reload();};
-
   const exportCajaPDF=()=>{
-    const doc=new jsPDF();
-    doc.setFontSize(18);doc.setFont("helvetica","bold");doc.text("Reporte de Caja",20,25);
-    doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);
-    doc.text(`${desde?`Desde: ${fmtDate(desde)} `:""}${hasta?`Hasta: ${fmtDate(hasta)}`:""}`,20,33);
+    const doc=new jsPDF();doc.setFontSize(18);doc.setFont("helvetica","bold");doc.text("Reporte de Caja",20,25);
+    doc.setFontSize(10);doc.setFont("helvetica","normal");doc.setTextColor(120);doc.text(`${desde?`Desde: ${fmtDate(desde)} `:""}${hasta?`Hasta: ${fmtDate(hasta)}`:""}`,20,33);
     const totalIng=filtered.filter(m=>m.type==="ingreso").reduce((a,m)=>a+Number(m.amount),0);
     const totalEg=filtered.filter(m=>m.type==="egreso").reduce((a,m)=>a+Number(m.amount),0);
     autoTable(doc,{startY:40,head:[["Fecha","Tipo","Categoría","Descripción","Monto"]],body:filtered.map(m=>[fmtDate(m.date),m.type==="ingreso"?"Ingreso":"Egreso",m.category||"—",m.description||"—",`${m.type==="ingreso"?"+":"-"}${fmt(m.amount)}`]),styles:{fontSize:9},headStyles:{fillColor:[24,24,27],textColor:255}});
-    const fy=doc.lastAutoTable.finalY+10;
-    doc.setFontSize(11);doc.setFont("helvetica","bold");
+    const fy=doc.lastAutoTable.finalY+10;doc.setFontSize(11);doc.setFont("helvetica","bold");
     doc.setTextColor(22,101,52);doc.text(`Ingresos: ${fmt(totalIng)}`,20,fy);
     doc.setTextColor(127,29,29);doc.text(`Egresos: ${fmt(totalEg)}`,20,fy+8);
     doc.setTextColor(0);doc.text(`Saldo: ${fmt(totalIng-totalEg)}`,20,fy+16);
     doc.save("caja.pdf");
   };
-
   const byMonth=filtered.reduce((acc,m)=>{const k=(m.date||"").slice(0,7);if(!acc[k])acc[k]={label:k,ing:0,eg:0};if(m.type==="ingreso")acc[k].ing+=Number(m.amount);else acc[k].eg+=Number(m.amount);return acc;},{});
   const months=Object.values(byMonth).sort((a,b)=>b.label.localeCompare(a.label)).slice(0,4);
-
   return(
     <div className="page">
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
@@ -1145,7 +1054,6 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
           </div>)}
         </div>
       </div>}
-      {/* Filtros */}
       <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
         {[["todos","Todos"],["ingreso","Ingresos"],["egreso","Egresos"]].map(([v,l])=><button key={v} onClick={()=>setFilterType(v)} style={{padding:"3px 10px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,border:"1.5px solid",borderColor:filterType===v?"#18181b":"#e2dfd8",background:filterType===v?"#18181b":"#fff",color:filterType===v?"#fff":"#555",fontFamily:"inherit"}}>{l}</button>)}
         <input type="date" className="field" style={{width:130,padding:"5px 8px",fontSize:12}} value={desde} onChange={e=>setDesde(e.target.value)}/>
@@ -1178,7 +1086,6 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
   );
 }
 
-// ─── CONFIG ───────────────────────────────────────────────────────
 function Config({config,setConfig,reload,userId,saveConfigKey}){
   const [draft,setDraft]=useState({...config});
   const [saved,setSaved]=useState(false);
@@ -1186,27 +1093,60 @@ function Config({config,setConfig,reload,userId,saveConfigKey}){
   const [newCI,setNewCI]=useState("");
   const [newCE,setNewCE]=useState("");
   const [newSvc,setNewSvc]=useState("");
+  const [showNewChofer,setShowNewChofer]=useState(false);
+  const [choferes,setChoferes]=useState([]);
+  const [drivers,setDrivers]=useState([]);
+  const [newChofer,setNewChofer]=useState({email:"",password:"",driverId:""});
+  const [savingChofer,setSavingChofer]=useState(false);
+  const [choferMsg,setChoferMsg]=useState("");
+
+  useEffect(()=>{loadChoferes();loadDrivers();},[]);
+
+  const loadChoferes=async()=>{
+    const {data}=await supabase.from('user_roles').select('*, drivers(name)').eq('empresa_id',userId).eq('role','chofer');
+    setChoferes(data||[]);
+  };
+
+  const loadDrivers=async()=>{
+    const {data}=await supabase.from('drivers').select('*').eq('empresa_id',userId);
+    setDrivers(data||[]);
+  };
+
+  const crearChofer=async()=>{
+    if(!newChofer.email||!newChofer.password)return;
+    setSavingChofer(true);setChoferMsg("");
+    try{
+      const {data:{session}}=await supabase.auth.getSession();
+      const response=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${session.access_token}`},
+        body:JSON.stringify({email:newChofer.email,password:newChofer.password,empresa_id:userId,driver_id:newChofer.driverId?Number(newChofer.driverId):null}),
+      });
+      const result=await response.json();
+      if(result.error)throw new Error(result.error);
+      setChoferMsg("✅ Usuario chofer creado correctamente");
+      setNewChofer({email:"",password:"",driverId:""});
+      await loadChoferes();
+    }catch(e){setChoferMsg(`❌ Error: ${e.message}`);}
+    setSavingChofer(false);
+  };
+
+  const eliminarChofer=async(id,userId_chofer)=>{
+    await supabase.from('user_roles').delete().eq('id',id);
+    await loadChoferes();
+  };
 
   const save=async()=>{
     setConfig(draft);
-    for(const [key,value] of Object.entries(draft)){
-      await saveConfigKey(key,value);
-    }
-    setSaved(true);
-    setTimeout(()=>setSaved(false),2500);
+    for(const [key,value] of Object.entries(draft)){await saveConfigKey(key,value);}
+    setSaved(true);setTimeout(()=>setSaved(false),2500);
   };
 
   const addTag=()=>{if(!newTag.trim()||draft.clientTags.includes(newTag.trim()))return;setDraft(p=>({...p,clientTags:[...p.clientTags,newTag.trim()]}));setNewTag("");};
   const addCI=()=>{if(!newCI.trim()||draft.catIngreso.includes(newCI.trim()))return;setDraft(p=>({...p,catIngreso:[...p.catIngreso,newCI.trim()]}));setNewCI("");};
   const addCE=()=>{if(!newCE.trim()||draft.catEgreso.includes(newCE.trim()))return;setDraft(p=>({...p,catEgreso:[...p.catEgreso,newCE.trim()]}));setNewCE("");};
   const addSvc=()=>{if(!newSvc.trim()||draft.services.includes(newSvc.trim()))return;setDraft(p=>({...p,services:[...p.services,newSvc.trim()]}));setNewSvc("");};
-
-  const toggleModule=(key)=>{
-    if(key==="dashboard"||key==="config")return;
-    const mods=draft.modules||DEFAULT_CONFIG.modules;
-    const updated=mods.includes(key)?mods.filter(m=>m!==key):[...mods,key];
-    setDraft(p=>({...p,modules:updated}));
-  };
+  const toggleModule=(key)=>{if(key==="dashboard"||key==="config")return;const mods=draft.modules||DEFAULT_CONFIG.modules;const updated=mods.includes(key)?mods.filter(m=>m!==key):[...mods,key];setDraft(p=>({...p,modules:updated}));};
 
   return(
     <div className="page" style={{maxWidth:680}}>
@@ -1251,7 +1191,26 @@ function Config({config,setConfig,reload,userId,saveConfigKey}){
             );
           })}
         </div>
-        <div style={{fontSize:11,color:"#aaa",marginTop:8}}>Dashboard y Config siempre activos. Los módulos inactivos no aparecen en el menú.</div>
+        <div style={{fontSize:11,color:"#aaa",marginTop:8}}>Dashboard y Config siempre activos.</div>
+      </div>
+
+      {/* Usuarios choferes */}
+      <div className="settings-section">
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div className="sec" style={{marginBottom:0}}>👷 Usuarios choferes</div>
+          <button className="btn btn-dark btn-sm" onClick={()=>setShowNewChofer(true)}>+ Crear chofer</button>
+        </div>
+        <div style={{fontSize:12,color:"#888",marginBottom:10}}>Los choferes pueden cargar partes diarios desde su celular con su propio usuario.</div>
+        {choferes.length===0&&<div style={{color:"#aaa",fontSize:13,textAlign:"center",padding:"8px 0"}}>Sin usuarios choferes creados</div>}
+        {choferes.map(c=>(
+          <div key={c.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:9,border:"1.5px solid #ede9e3",marginBottom:6,background:"#fafaf8"}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:600}}>🚛 {c.drivers?.name||"Sin chofer asignado"}</div>
+              <div style={{fontSize:11,color:"#aaa",marginTop:1}}>Rol: Chofer</div>
+            </div>
+            <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca",padding:"3px 8px"}} onClick={()=>eliminarChofer(c.id,c.user_id)}>✕</button>
+          </div>
+        ))}
       </div>
 
       {[
@@ -1266,10 +1225,34 @@ function Config({config,setConfig,reload,userId,saveConfigKey}){
           <div style={{display:"flex",gap:8}}><input className="field" placeholder="Nueva..." value={newVal} onChange={e=>setNew(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()}/><button className="btn btn-outline btn-sm" style={{whiteSpace:"nowrap"}} onClick={add}>+ Agregar</button></div>
         </div>
       ))}
+
       <div style={{display:"flex",alignItems:"center",gap:10}}>
         <button className="btn btn-dark" onClick={save} style={{padding:"10px 24px"}}>{saved?"✓ Guardado":"Guardar cambios"}</button>
         {saved&&<span style={{fontSize:13,color:"#166534",fontWeight:600}}>¡Aplicado!</span>}
       </div>
+
+      {showNewChofer&&(
+        <div className="modal-bg" onClick={()=>setShowNewChofer(false)}>
+          <div className="modal" style={{maxWidth:420}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>👷 Nuevo usuario chofer</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Email del chofer</label><input className="field" type="email" placeholder="chofer@email.com" value={newChofer.email} onChange={e=>setNewChofer(p=>({...p,email:e.target.value}))} autoFocus/></div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Contraseña</label><input className="field" type="password" placeholder="Mínimo 6 caracteres" value={newChofer.password} onChange={e=>setNewChofer(p=>({...p,password:e.target.value}))}/></div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Asignar a chofer (opcional)</label>
+                <select className="field" value={newChofer.driverId} onChange={e=>setNewChofer(p=>({...p,driverId:e.target.value}))}>
+                  <option value="">— Sin asignar —</option>
+                  {drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              {choferMsg&&<div style={{fontSize:13,fontWeight:600,padding:"8px 12px",borderRadius:8,background:choferMsg.startsWith("✅")?"#dcfce7":"#fee2e2",color:choferMsg.startsWith("✅")?"#166534":"#7f1d1d"}}>{choferMsg}</div>}
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
+              <button className="btn btn-outline" onClick={()=>{setShowNewChofer(false);setChoferMsg("");}}>Cerrar</button>
+              <button className="btn btn-dark" disabled={savingChofer||!newChofer.email||!newChofer.password} onClick={crearChofer}>{savingChofer?"Creando...":"Crear usuario"}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

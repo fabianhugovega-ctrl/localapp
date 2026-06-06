@@ -366,7 +366,7 @@ export default function App() {
         {tab==="clientes"&&<Clientes clients={clients} products={products} movements={movements} selClient={selClient} setSelClient={setSelClient} config={config} fmt={fmt} tColor={tColor} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
         {tab==="agenda"&&<Agenda appointments={appointments} clients={clients} config={config} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
         {tab==="stock"&&<Stock products={products} lowStock={lowStock} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
-        {tab==="caja"&&<Caja movements={movements} clients={clients} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
+        {tab==="caja"&&<Caja movements={movements} clients={clients} products={products} saldo={saldo} totalIngresos={totalIngresos} totalEgresos={totalEgresos} config={config} fmt={fmt} reload={loadAll} isMobile={isMobile} userId={user.id}/>}
         {tab==="servicios"&&<Servicios clients={clients} config={config} userId={user.id}/>}
         {tab==="nomina"&&<Nomina config={config} userId={user.id}/>}
         {tab==="transporte"&&<Transporte clients={clients} config={config} userId={user.id}/>}
@@ -1012,13 +1012,13 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
   );
 }
 
-function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,reload,isMobile,userId}){
+function Caja({movements,clients,products=[],saldo,totalIngresos,totalEgresos,config,fmt,reload,isMobile,userId}){
   const [showNew,setShowNew]=useState(false);
   const [filterType,setFilterType]=useState("todos");
   const [filterCat,setFilterCat]=useState("Todos");
   const [desde,setDesde]=useState("");
   const [hasta,setHasta]=useState("");
-  const [newM,setNewM]=useState({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});
+  const [newM,setNewM]=useState({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:"",productId:"",qty:1});
   const [saving,setSaving]=useState(false);
   const allCats=["Todos",...config.catIngreso,...config.catEgreso];
   const filtered=[...movements].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).filter(m=>{
@@ -1028,7 +1028,7 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
     if(hasta&&m.date>hasta)return false;
     return true;
   });
-  const addM=async()=>{if(!newM.description||!newM.amount||!newM.date)return;setSaving(true);await supabase.from('movements').insert({empresa_id:userId,type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:""});setShowNew(false);};
+  const addM=async()=>{if(!newM.description||!newM.amount||!newM.date)return;setSaving(true);await supabase.from('movements').insert({empresa_id:userId,type:newM.type,category:newM.category,description:newM.description,amount:Number(newM.amount),date:newM.date,client_id:newM.clientId?Number(newM.clientId):null});if(newM.type==="ingreso"&&newM.productId){const p=products.find(p=>p.id===Number(newM.productId));if(p&&p.stock>0){await supabase.from('products').update({stock:Math.max(0,p.stock-Number(newM.qty||1))}).eq('id',p.id);}}await reload();setSaving(false);setNewM({type:"ingreso",category:config.catIngreso[0],description:"",amount:"",date:todayStr(),clientId:"",productId:"",qty:1});setShowNew(false);};
   const deleteM=async(id)=>{await supabase.from('movements').delete().eq('id',id);await reload();};
   const exportCajaPDF=()=>{
     const doc=new jsPDF();doc.setFontSize(18);doc.setFont("helvetica","bold");doc.text("Reporte de Caja",20,25);
@@ -1094,6 +1094,13 @@ function Caja({movements,clients,saldo,totalIngresos,totalEgresos,config,fmt,rel
           <input className="field" type="number" placeholder="Monto *" value={newM.amount} onChange={e=>setNewM(p=>({...p,amount:e.target.value}))}/>
           <input className="field" type="date" value={newM.date} onChange={e=>setNewM(p=>({...p,date:e.target.value}))}/>
           {newM.type==="ingreso"&&<select className="field" value={newM.clientId} onChange={e=>setNewM(p=>({...p,clientId:e.target.value}))}><option value="">— Cliente (opcional) —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+          {newM.type==="ingreso"&&products.length>0&&<div style={{display:"flex",gap:8}}>
+            <select className="field" style={{flex:2}} value={newM.productId} onChange={e=>{const p=products.find(p=>p.id===Number(e.target.value));setNewM(prev=>({...prev,productId:e.target.value,description:prev.description||(p?`Venta ${p.name}`:""),amount:prev.amount||(p?p.price:"")}));}}>
+              <option value="">— Producto (opcional) —</option>
+              {products.map(p=><option key={p.id} value={p.id}>{p.name} — stock: {p.stock}</option>)}
+            </select>
+            {newM.productId&&<input className="field" style={{flex:1,width:60}} type="number" min={1} placeholder="Cant." value={newM.qty} onChange={e=>setNewM(p=>({...p,qty:Number(e.target.value)}))}/>}
+          </div>}
         </div>
         <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNew(false)}>Cancelar</button><button className={`btn ${newM.type==="ingreso"?"btn-green":"btn-red"}`} onClick={addM} disabled={saving}>{saving?"Guardando...":"Registrar"}</button></div>
       </div></div>}
@@ -1271,3 +1278,4 @@ function Config({config,setConfig,reload,userId,saveConfigKey}){
     </div>
   );
 }
+

@@ -272,7 +272,7 @@ export default function Transporte({ clients=[], config={}, userId }) {
 
       {tab==="mantenimiento"&&<Mantenimiento vehicles={vehicles} maintenance={maintenance} userId={userId} fmt={fmt} reload={loadAll}/>}
 
-      {showNewTrip&&<TripModal drivers={drivers} vehicles={vehicles} clients={clients} onSave={async(form)=>{await supabase.from("trips").insert({...form,empresa_id:userId,nro:nroViaje()});await loadAll();setShowNewTrip(false);}} onClose={()=>setShowNewTrip(false)}/>}
+      {showNewTrip&&<TripModal drivers={drivers} vehicles={vehicles} clients={clients} onSave={async(form)=>{await supabase.from("trips").insert({...form,empresa_id:userId,nro:nroViaje()});if(Number(form.rate)>0){await supabase.from("movements").insert({empresa_id:userId,type:"ingreso",category:"Transporte",description:`Viaje ${form.origin} → ${form.destination}${form.client_name?` — ${form.client_name}`:""}`,amount:Number(form.rate),date:form.date||new Date().toISOString().slice(0,10)});}await loadAll();setShowNewTrip(false);}} onClose={()=>setShowNewTrip(false)}/>}
       {showNewDriver&&<DriverModal onSave={async(form)=>{await supabase.from("drivers").insert({...form,empresa_id:userId});await loadAll();setShowNewDriver(false);}} onClose={()=>setShowNewDriver(false)}/>}
       {showNewVehicle&&<VehicleModal onSave={async(form)=>{await supabase.from("vehicles").insert({...form,empresa_id:userId});await loadAll();setShowNewVehicle(false);}} onClose={()=>setShowNewVehicle(false)}/>}
       {editDriver&&<DriverModal driver={editDriver} onSave={async(form)=>{await supabase.from("drivers").update(form).eq("id",editDriver.id);await loadAll();setEditDriver(null);}} onClose={()=>setEditDriver(null)}/>}

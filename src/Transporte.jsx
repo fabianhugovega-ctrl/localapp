@@ -19,6 +19,8 @@ const TRIP_STATUS = {
 
 const EXPENSE_TYPES = ["Combustible","Peaje","Comida","Alojamiento","Reparación","Lavado","Multa","Otro"];
 
+const TRUCK_BRANDS = ["Mercedes-Benz","Scania","Volvo","Iveco","Ford","Volkswagen","Renault","DAF","MAN","Fiat","Toyota","Chevrolet","Otro"];
+
 const MAINTENANCE_TYPES = [
   "Cambio de aceite","Filtro de aceite","Filtro de aire","Filtro de combustible",
   "Correa de distribución","Pastillas de freno","Discos de freno","Neumáticos",
@@ -54,6 +56,8 @@ export default function Transporte({ clients=[], config={}, userId }) {
   const [showNewTrip, setShowNewTrip] = useState(false);
   const [showNewDriver, setShowNewDriver] = useState(false);
   const [showNewVehicle, setShowNewVehicle] = useState(false);
+  const [editDriver, setEditDriver] = useState(null);
+  const [editVehicle, setEditVehicle] = useState(null);
   const [filterStatus, setFilterStatus] = useState("todos");
   const [search, setSearch] = useState("");
   const [desde, setDesde] = useState("");
@@ -222,6 +226,8 @@ export default function Transporte({ clients=[], config={}, userId }) {
                   <div style={{fontWeight:700,fontSize:13}}>{trips.filter(t=>t.driver_id===d.id).length} viajes</div>
                   {kmChofer>0&&<div style={{fontSize:11,color:"#888"}}>{kmChofer.toLocaleString("es-AR")} km</div>}
                 </div>
+                <button className="btn btn-outline btn-sm" onClick={e=>{e.stopPropagation();setEditDriver(d);}}>✏️</button>
+                <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={async e=>{e.stopPropagation();if(!window.confirm("¿Eliminar chofer?"))return;await supabase.from("drivers").delete().eq("id",d.id);loadAll();}}>🗑</button>
               </div>
             );
           })}
@@ -230,7 +236,7 @@ export default function Transporte({ clients=[], config={}, userId }) {
       )}
 
       {tab==="vehiculos"&&(
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(280px,1fr))",gap:12}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(300px,1fr))",gap:12}}>
           {vehicles.map(v=>{
             const alerts=[
               v.insurance_expiry&&daysUntil(v.insurance_expiry)<=30?`Seguro vence ${fmtDate(v.insurance_expiry)}`:null,
@@ -245,7 +251,10 @@ export default function Transporte({ clients=[], config={}, userId }) {
                     <div style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800}}>{v.plate}</div>
                     <div style={{fontSize:13,color:"#555",marginTop:2}}>{v.brand} {v.model} {v.year||""}</div>
                   </div>
-                  <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:v.active?"#dcfce7":"#fee2e2",color:v.active?"#166534":"#7f1d1d"}}>{v.active?"Activo":"Inactivo"}</span>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:v.active?"#dcfce7":"#fee2e2",color:v.active?"#166534":"#7f1d1d"}}>{v.active?"Activo":"Inactivo"}</span>
+                    <button className="btn btn-outline btn-sm" onClick={()=>setEditVehicle(v)}>✏️</button>
+                  </div>
                 </div>
                 {[["🛡️","Seguro",fmtDate(v.insurance_expiry)],["🔧","VTV",fmtDate(v.vtv_expiry)],["📋","Habilitación",fmtDate(v.habilitacion_expiry)]].map(([ic,l,val],i)=>(
                   <div key={i} style={{display:"flex",gap:8,fontSize:12,padding:"4px 0",borderBottom:"1px solid #f5f3ef"}}>
@@ -266,6 +275,8 @@ export default function Transporte({ clients=[], config={}, userId }) {
       {showNewTrip&&<TripModal drivers={drivers} vehicles={vehicles} clients={clients} onSave={async(form)=>{await supabase.from("trips").insert({...form,empresa_id:userId,nro:nroViaje()});await loadAll();setShowNewTrip(false);}} onClose={()=>setShowNewTrip(false)}/>}
       {showNewDriver&&<DriverModal onSave={async(form)=>{await supabase.from("drivers").insert({...form,empresa_id:userId});await loadAll();setShowNewDriver(false);}} onClose={()=>setShowNewDriver(false)}/>}
       {showNewVehicle&&<VehicleModal onSave={async(form)=>{await supabase.from("vehicles").insert({...form,empresa_id:userId});await loadAll();setShowNewVehicle(false);}} onClose={()=>setShowNewVehicle(false)}/>}
+      {editDriver&&<DriverModal driver={editDriver} onSave={async(form)=>{await supabase.from("drivers").update(form).eq("id",editDriver.id);await loadAll();setEditDriver(null);}} onClose={()=>setEditDriver(null)}/>}
+      {editVehicle&&<VehicleModal vehicle={editVehicle} onSave={async(form)=>{await supabase.from("vehicles").update(form).eq("id",editVehicle.id);await loadAll();setEditVehicle(null);}} onClose={()=>setEditVehicle(null)}/>}
     </div>
   );
 }
@@ -325,26 +336,20 @@ function ParteDiario({ trips, drivers, vehicles, partes, userId, fmt, reload }) 
           <div className="card" style={{padding:16}}>
             <div style={{fontFamily:"'Syne',sans-serif",fontSize:16,fontWeight:800,marginBottom:14}}>📋 Parte diario</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha</label>
-                <input className="field" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/>
-              </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Chofer *</label>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha</label><input className="field" type="date" value={fecha} onChange={e=>setFecha(e.target.value)}/></div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Chofer *</label>
                 <select className="field" value={selDriver} onChange={e=>setSelDriver(e.target.value)}>
                   <option value="">— Seleccionar —</option>
                   {drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Unidad / Vehículo</label>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Unidad / Vehículo</label>
                 <select className="field" value={selVehicle} onChange={e=>setSelVehicle(e.target.value)}>
                   <option value="">— Seleccionar —</option>
                   {vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}
                 </select>
               </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Viaje (opcional)</label>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Viaje (opcional)</label>
                 <select className="field" value={selTripId} onChange={e=>setSelTripId(e.target.value)}>
                   <option value="">— Sin viaje —</option>
                   {viajesDisponibles.map(t=><option key={t.id} value={t.id}>{t.nro} — {t.origin} → {t.destination}</option>)}
@@ -353,40 +358,17 @@ function ParteDiario({ trips, drivers, vehicles, partes, userId, fmt, reload }) 
             </div>
             <div className="sec">🛣️ Kilómetros</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM inicio</label>
-                <input className="field" type="number" placeholder="Ej: 150000" value={form.km_inicio} onChange={e=>set("km_inicio",e.target.value)}/>
-              </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM fin</label>
-                <input className="field" type="number" placeholder="Ej: 151500" value={form.km_fin} onChange={e=>set("km_fin",e.target.value)}/>
-              </div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM inicio</label><input className="field" type="number" placeholder="Ej: 150000" value={form.km_inicio} onChange={e=>set("km_inicio",e.target.value)}/></div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM fin</label><input className="field" type="number" placeholder="Ej: 151500" value={form.km_fin} onChange={e=>set("km_fin",e.target.value)}/></div>
             </div>
-            {km_rec>0&&(
-              <div style={{background:"#eff6ff",border:"1.5px solid #93c5fd",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:12,color:"#555"}}>KM recorridos</span>
-                <span style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:"#1d4ed8"}}>{km_rec.toLocaleString("es-AR")} km</span>
-              </div>
-            )}
+            {km_rec>0&&<div style={{background:"#eff6ff",border:"1.5px solid #93c5fd",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:12,color:"#555"}}>KM recorridos</span><span style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:"#1d4ed8"}}>{km_rec.toLocaleString("es-AR")} km</span></div>}
             <div className="sec">⛽ Combustible</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Litros cargados</label>
-                <input className="field" type="number" placeholder="0" value={form.combustible_litros} onChange={e=>set("combustible_litros",e.target.value)}/>
-              </div>
-              <div>
-                <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Precio por litro</label>
-                <input className="field" type="number" placeholder="0" value={form.combustible_precio} onChange={e=>set("combustible_precio",e.target.value)}/>
-              </div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Litros cargados</label><input className="field" type="number" placeholder="0" value={form.combustible_litros} onChange={e=>set("combustible_litros",e.target.value)}/></div>
+              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Precio por litro</label><input className="field" type="number" placeholder="0" value={form.combustible_precio} onChange={e=>set("combustible_precio",e.target.value)}/></div>
             </div>
-            {comb_total>0&&(
-              <div style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontSize:12,color:"#555"}}>Total combustible</span>
-                <span style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:"#854d0e"}}>{fmt(comb_total)}</span>
-              </div>
-            )}
+            {comb_total>0&&<div style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 14px",marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}><span style={{fontSize:12,color:"#555"}}>Total combustible</span><span style={{fontFamily:"'Syne',sans-serif",fontSize:20,fontWeight:800,color:"#854d0e"}}>{fmt(comb_total)}</span></div>}
           </div>
-
           <div className="card" style={{padding:16}}>
             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
               <div className="sec" style={{marginBottom:0}}>✅ Checklist pre-viaje</div>
@@ -403,16 +385,12 @@ function ParteDiario({ trips, drivers, vehicles, partes, userId, fmt, reload }) 
                 </div>
               </div>
             ))}
-            <div style={{marginTop:12}}>
-              <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Observaciones</label>
-              <textarea className="field" rows={3} placeholder="Notas adicionales sobre el estado de la unidad..." value={form.observaciones} onChange={e=>set("observaciones",e.target.value)} style={{resize:"none"}}/>
-            </div>
+            <div style={{marginTop:12}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Observaciones</label><textarea className="field" rows={3} placeholder="Notas adicionales..." value={form.observaciones} onChange={e=>set("observaciones",e.target.value)} style={{resize:"none"}}/></div>
             <button className="btn btn-dark" style={{width:"100%",marginTop:14,padding:"12px"}} disabled={saving||!selDriver} onClick={guardarParte}>
               {saving?"Guardando...":saved?"✅ Parte guardado":"Guardar parte diario"}
             </button>
           </div>
         </div>
-
         <div className="card" style={{padding:16}}>
           <div className="sec">Historial de partes</div>
           {historial.length===0&&<div style={{textAlign:"center",padding:24,color:"#aaa"}}>Sin partes registrados</div>}
@@ -430,34 +408,18 @@ function ParteDiario({ trips, drivers, vehicles, partes, userId, fmt, reload }) 
                 {p.km_recorridos>0&&<div style={{fontSize:11,color:"#555",marginTop:4}}>🛣️ {Number(p.km_recorridos).toLocaleString("es-AR")} km</div>}
                 {p.combustible_litros>0&&<div style={{fontSize:11,color:"#555"}}>⛽ {p.combustible_litros}L — {fmt(p.combustible_total||0)}</div>}
                 {tieneAlerta&&<div style={{fontSize:11,color:"#7f1d1d",fontWeight:600,marginTop:4}}>⚠️ Ítems en mal estado</div>}
-                {p.observaciones&&<div style={{fontSize:11,color:"#555",marginTop:4,fontStyle:"italic"}}>{p.observaciones}</div>}
               </div>
             );
           })}
         </div>
       </div>
-
       {selParte&&(
         <div className="modal-bg" onClick={()=>setSelParte(null)}>
           <div className="modal" style={{maxWidth:500}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:4}}>
-              Parte — {drivers.find(d=>d.id===selParte.driver_id)?.name||"—"}
-            </div>
-            <div style={{fontSize:12,color:"#888",marginBottom:14}}>
-              {fmtDate(selParte.fecha)} · {vehicles.find(v=>v.id===selParte.vehicle_id)?.plate||"Sin unidad"}
-            </div>
-            {selParte.km_recorridos>0&&(
-              <div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:13,color:"#555"}}>KM recorridos</span>
-                <span style={{fontWeight:700,color:"#1d4ed8"}}>{Number(selParte.km_recorridos).toLocaleString("es-AR")} km</span>
-              </div>
-            )}
-            {selParte.combustible_litros>0&&(
-              <div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between"}}>
-                <span style={{fontSize:13,color:"#555"}}>Combustible</span>
-                <span style={{fontWeight:700,color:"#854d0e"}}>{selParte.combustible_litros}L — {fmt(selParte.combustible_total||0)}</span>
-              </div>
-            )}
+            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:4}}>Parte — {drivers.find(d=>d.id===selParte.driver_id)?.name||"—"}</div>
+            <div style={{fontSize:12,color:"#888",marginBottom:14}}>{fmtDate(selParte.fecha)} · {vehicles.find(v=>v.id===selParte.vehicle_id)?.plate||"Sin unidad"}</div>
+            {selParte.km_recorridos>0&&<div style={{background:"#eff6ff",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:"#555"}}>KM recorridos</span><span style={{fontWeight:700,color:"#1d4ed8"}}>{Number(selParte.km_recorridos).toLocaleString("es-AR")} km</span></div>}
+            {selParte.combustible_litros>0&&<div style={{background:"#fff7ed",borderRadius:10,padding:"10px 14px",marginBottom:10,display:"flex",justifyContent:"space-between"}}><span style={{fontSize:13,color:"#555"}}>Combustible</span><span style={{fontWeight:700,color:"#854d0e"}}>{selParte.combustible_litros}L — {fmt(selParte.combustible_total||0)}</span></div>}
             <div className="sec" style={{marginTop:10}}>Checklist</div>
             {CHECK_ITEMS.map(item=>{
               const val=selParte[item.key];
@@ -470,9 +432,7 @@ function ParteDiario({ trips, drivers, vehicles, partes, userId, fmt, reload }) 
                 </div>
               );
             })}
-            {selParte.observaciones&&(
-              <div style={{marginTop:12,background:"#f8f7f4",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#555",fontStyle:"italic"}}>{selParte.observaciones}</div>
-            )}
+            {selParte.observaciones&&<div style={{marginTop:12,background:"#f8f7f4",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#555",fontStyle:"italic"}}>{selParte.observaciones}</div>}
             <button className="btn btn-outline" style={{width:"100%",marginTop:16}} onClick={()=>setSelParte(null)}>Cerrar</button>
           </div>
         </div>
@@ -486,71 +446,45 @@ function Mantenimiento({ vehicles, maintenance, userId, fmt, reload }) {
   const [filterVehicle, setFilterVehicle] = useState("todos");
   const filtered = maintenance.filter(m=>filterVehicle==="todos"||String(m.vehicle_id)===String(filterVehicle));
   const proximos = maintenance.filter(m=>(m.next_service_date&&daysUntil(m.next_service_date)<=60)||(m.next_service_km));
-
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,flexWrap:"wrap"}}>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           <button onClick={()=>setFilterVehicle("todos")} style={{padding:"4px 10px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,border:"1.5px solid",borderColor:filterVehicle==="todos"?"#18181b":"#e2dfd8",background:filterVehicle==="todos"?"#18181b":"#fff",color:filterVehicle==="todos"?"#fff":"#555",fontFamily:"inherit"}}>Todos</button>
-          {vehicles.map(v=>(
-            <button key={v.id} onClick={()=>setFilterVehicle(String(v.id))} style={{padding:"4px 10px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,border:"1.5px solid",borderColor:filterVehicle===String(v.id)?"#18181b":"#e2dfd8",background:filterVehicle===String(v.id)?"#18181b":"#fff",color:filterVehicle===String(v.id)?"#fff":"#555",fontFamily:"inherit"}}>{v.plate}</button>
-          ))}
+          {vehicles.map(v=><button key={v.id} onClick={()=>setFilterVehicle(String(v.id))} style={{padding:"4px 10px",borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:600,border:"1.5px solid",borderColor:filterVehicle===String(v.id)?"#18181b":"#e2dfd8",background:filterVehicle===String(v.id)?"#18181b":"#fff",color:filterVehicle===String(v.id)?"#fff":"#555",fontFamily:"inherit"}}>{v.plate}</button>)}
         </div>
         <button className="btn btn-dark btn-sm" style={{marginLeft:"auto"}} onClick={()=>setShowNew(true)}>+ Registrar service</button>
       </div>
-
-      {proximos.length>0&&(
-        <div style={{marginBottom:14}}>
-          <div className="sec">Próximos mantenimientos</div>
-          {proximos.map(m=>{
-            const v=vehicles.find(v=>v.id===m.vehicle_id);
-            return (
-              <div key={m.id} style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div>
-                  <div style={{fontWeight:600,fontSize:13}}>{m.type} — {v?.plate||"—"}</div>
-                  {m.next_service_date&&<div style={{fontSize:11,color:"#854d0e"}}>📅 Próximo: {fmtDate(m.next_service_date)} ({daysUntil(m.next_service_date)} días)</div>}
-                  {m.next_service_km&&<div style={{fontSize:11,color:"#854d0e"}}>🛣️ Próximo: {Number(m.next_service_km).toLocaleString("es-AR")} km</div>}
-                </div>
-                <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#fee2e2",color:"#7f1d1d"}}>⚠️ Próximo</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
+      {proximos.length>0&&<div style={{marginBottom:14}}><div className="sec">Próximos mantenimientos</div>
+        {proximos.map(m=>{const v=vehicles.find(v=>v.id===m.vehicle_id);return(
+          <div key={m.id} style={{background:"#fff7ed",border:"1.5px solid #fed7aa",borderRadius:10,padding:"10px 14px",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <div><div style={{fontWeight:600,fontSize:13}}>{m.type} — {v?.plate||"—"}</div>
+            {m.next_service_date&&<div style={{fontSize:11,color:"#854d0e"}}>📅 Próximo: {fmtDate(m.next_service_date)} ({daysUntil(m.next_service_date)} días)</div>}
+            {m.next_service_km&&<div style={{fontSize:11,color:"#854d0e"}}>🛣️ Próximo: {Number(m.next_service_km).toLocaleString("es-AR")} km</div>}</div>
+            <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#fee2e2",color:"#7f1d1d"}}>⚠️ Próximo</span>
+          </div>
+        );})}
+      </div>}
       <div className="card" style={{overflow:"hidden"}}>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead>
-            <tr style={{background:"#f8f7f4",borderBottom:"1.5px solid #e8e4dc"}}>
-              {["Vehículo","Tipo","Fecha","KM","Próx. KM","Próx. fecha","Taller","Costo",""].map((h,i)=>(
-                <th key={i} style={{padding:"9px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:".06em"}}>{h}</th>
-              ))}
+          <thead><tr style={{background:"#f8f7f4",borderBottom:"1.5px solid #e8e4dc"}}>{["Vehículo","Tipo","Fecha","KM","Próx. KM","Próx. fecha","Taller","Costo",""].map((h,i)=><th key={i} style={{padding:"9px 12px",textAlign:"left",fontSize:10,fontWeight:700,color:"#888",textTransform:"uppercase",letterSpacing:".06em"}}>{h}</th>)}</tr></thead>
+          <tbody>{filtered.map(m=>{const v=vehicles.find(v=>v.id===m.vehicle_id);return(
+            <tr key={m.id} style={{borderBottom:"1px solid #f0ede6"}}>
+              <td style={{padding:"10px 12px",fontWeight:600,fontSize:13}}>{v?.plate||"—"}</td>
+              <td style={{padding:"10px 12px",fontSize:13}}>{m.type}</td>
+              <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{fmtDate(m.date)}</td>
+              <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.km_at_service?`${Number(m.km_at_service).toLocaleString("es-AR")} km`:"—"}</td>
+              <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.next_service_km?`${Number(m.next_service_km).toLocaleString("es-AR")} km`:"—"}</td>
+              <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{fmtDate(m.next_service_date)}</td>
+              <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.workshop||"—"}</td>
+              <td style={{padding:"10px 12px",fontWeight:600,fontSize:13}}>{m.cost?fmt(m.cost):"—"}</td>
+              <td style={{padding:"10px 12px"}}><button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca",padding:"3px 8px"}} onClick={async()=>{await supabase.from("vehicle_maintenance").delete().eq("id",m.id);await reload();}}>✕</button></td>
             </tr>
-          </thead>
-          <tbody>
-            {filtered.map(m=>{
-              const v=vehicles.find(v=>v.id===m.vehicle_id);
-              return (
-                <tr key={m.id} style={{borderBottom:"1px solid #f0ede6"}}>
-                  <td style={{padding:"10px 12px",fontWeight:600,fontSize:13}}>{v?.plate||"—"}</td>
-                  <td style={{padding:"10px 12px",fontSize:13}}>{m.type}</td>
-                  <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{fmtDate(m.date)}</td>
-                  <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.km_at_service?`${Number(m.km_at_service).toLocaleString("es-AR")} km`:"—"}</td>
-                  <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.next_service_km?`${Number(m.next_service_km).toLocaleString("es-AR")} km`:"—"}</td>
-                  <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{fmtDate(m.next_service_date)}</td>
-                  <td style={{padding:"10px 12px",fontSize:12,color:"#555"}}>{m.workshop||"—"}</td>
-                  <td style={{padding:"10px 12px",fontWeight:600,fontSize:13}}>{m.cost?fmt(m.cost):"—"}</td>
-                  <td style={{padding:"10px 12px"}}>
-                    <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca",padding:"3px 8px"}} onClick={async()=>{await supabase.from("vehicle_maintenance").delete().eq("id",m.id);await reload();}}>✕</button>
-                  </td>
-                </tr>
-              );
-            })}
+          );})}
           </tbody>
         </table>
         {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin registros de mantenimiento</div>}
       </div>
-
       {showNew&&<MaintenanceModal vehicles={vehicles} onSave={async(form)=>{await supabase.from("vehicle_maintenance").insert({...form,empresa_id:userId});await reload();setShowNew(false);}} onClose={()=>setShowNew(false)}/>}
     </div>
   );
@@ -561,38 +495,24 @@ function MaintenanceModal({ vehicles, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>🔧 Registrar service</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div style={{gridColumn:"1/-1"}}>
-            <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Vehículo *</label>
-            <select className="field" value={form.vehicle_id} onChange={e=>set("vehicle_id",e.target.value)}>
-              <option value="">— Seleccionar —</option>
-              {vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}
-            </select>
-          </div>
-          <div style={{gridColumn:"1/-1"}}>
-            <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tipo *</label>
-            <select className="field" value={form.type} onChange={e=>set("type",e.target.value)}>
-              <option value="">— Seleccionar —</option>
-              {MAINTENANCE_TYPES.map(t=><option key={t}>{t}</option>)}
-            </select>
-          </div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha</label><input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM al momento</label><input className="field" type="number" value={form.km_at_service} onChange={e=>set("km_at_service",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Próximo KM</label><input className="field" type="number" value={form.next_service_km} onChange={e=>set("next_service_km",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Próxima fecha</label><input className="field" type="date" value={form.next_service_date} onChange={e=>set("next_service_date",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Costo</label><input className="field" type="number" value={form.cost} onChange={e=>set("cost",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Taller</label><input className="field" value={form.workshop} onChange={e=>set("workshop",e.target.value)}/></div>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving||!form.vehicle_id||!form.type} onClick={async()=>{setSaving(true);await onSave({...form,vehicle_id:Number(form.vehicle_id),km_at_service:Number(form.km_at_service)||null,next_service_km:Number(form.next_service_km)||null,cost:Number(form.cost)||0,next_service_date:form.next_service_date||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
-        </div>
+    <div className="modal-bg" onClick={onClose}><div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>🔧 Registrar service</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Vehículo *</label><select className="field" value={form.vehicle_id} onChange={e=>set("vehicle_id",e.target.value)}><option value="">— Seleccionar —</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}</select></div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tipo *</label><select className="field" value={form.type} onChange={e=>set("type",e.target.value)}><option value="">— Seleccionar —</option>{MAINTENANCE_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha</label><input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM al momento</label><input className="field" type="number" value={form.km_at_service} onChange={e=>set("km_at_service",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Próximo KM</label><input className="field" type="number" value={form.next_service_km} onChange={e=>set("next_service_km",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Próxima fecha</label><input className="field" type="date" value={form.next_service_date} onChange={e=>set("next_service_date",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Costo</label><input className="field" type="number" value={form.cost} onChange={e=>set("cost",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Taller</label><input className="field" value={form.workshop} onChange={e=>set("workshop",e.target.value)}/></div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
       </div>
-    </div>
+      <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-dark" disabled={saving||!form.vehicle_id||!form.type} onClick={async()=>{setSaving(true);await onSave({...form,vehicle_id:Number(form.vehicle_id),km_at_service:Number(form.km_at_service)||null,next_service_km:Number(form.next_service_km)||null,cost:Number(form.cost)||0,next_service_date:form.next_service_date||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+      </div>
+    </div></div>
   );
 }
 
@@ -613,14 +533,12 @@ function TripDetail({ trip:t, drivers, vehicles, clients, config, fmt, userId, o
   const gastosComb=(t.expenses||[]).filter(e=>e.type==="Combustible");
   const totalLitros=gastosComb.reduce((a,e)=>a+Number(e.litros||0),0);
   const rendimiento=totalLitros>0&&kmRecorridos>0?(kmRecorridos/totalLitros).toFixed(1):null;
-
   const changeStatus=async(status)=>{await supabase.from("trips").update({status}).eq("id",t.id);await reload();};
   const deleteTrip=async()=>{if(!window.confirm("¿Eliminar viaje?"))return;await supabase.from("trips").delete().eq("id",t.id);onBack();reload();};
   const deleteExpense=async(id)=>{await supabase.from("trip_expenses").delete().eq("id",id);await reload();};
   const deleteNovedad=async(id)=>{await supabase.from("trip_novedades").delete().eq("id",id);await reload();};
   const guardarNovedad=async()=>{if(!nuevaNovedad.trim())return;await supabase.from("trip_novedades").insert({empresa_id:userId,trip_id:t.id,texto:nuevaNovedad});if(t.status==="en_camino")await supabase.from("trips").update({status:"con_novedad"}).eq("id",t.id);await reload();setNuevaNovedad("");setShowNovedad(false);};
   const guardarKm=async()=>{const km_i=Number(kmInicio)||null;const km_f=Number(kmFin)||null;const km_rec=km_i&&km_f?km_f-km_i:null;await supabase.from("trips").update({km_inicio:km_i,km_fin:km_f,km_recorridos:km_rec}).eq("id",t.id);await reload();setShowKm(false);};
-
   return (
     <div style={{padding:24,fontFamily:"'Instrument Sans',sans-serif"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20,flexWrap:"wrap"}}>
@@ -637,7 +555,6 @@ function TripDetail({ trip:t, drivers, vehicles, clients, config, fmt, userId, o
         <button className="btn btn-outline btn-sm" onClick={()=>setShowEdit(true)}>✏️ Editar</button>
         <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca"}} onClick={deleteTrip}>🗑</button>
       </div>
-
       <div style={{display:"grid",gridTemplateColumns:"320px 1fr",gap:16,alignItems:"start"}}>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div className="card" style={{padding:16}}>
@@ -652,18 +569,14 @@ function TripDetail({ trip:t, drivers, vehicles, clients, config, fmt, userId, o
           <div className="card" style={{padding:16}}>
             <div className="sec">🛣️ KM</div>
             {[["KM inicio",t.km_inicio?t.km_inicio.toLocaleString("es-AR"):"—"],["KM fin",t.km_fin?t.km_fin.toLocaleString("es-AR"):"—"],["Recorridos",kmRecorridos>0?`${kmRecorridos.toLocaleString("es-AR")} km`:"—"],...(rendimiento?[["Rendimiento",`${rendimiento} km/L`]]:[]),(totalLitros>0?[["Total combustible",`${totalLitros.toLocaleString("es-AR")} L`]]:[])].map(([label,val],i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f5f3ef"}}>
-                <span style={{fontSize:12,color:"#555"}}>{label}</span><span style={{fontWeight:600,fontSize:13}}>{val}</span>
-              </div>
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #f5f3ef"}}><span style={{fontSize:12,color:"#555"}}>{label}</span><span style={{fontWeight:600,fontSize:13}}>{val}</span></div>
             ))}
             <button className="btn btn-outline btn-sm" style={{marginTop:10,width:"100%"}} onClick={()=>setShowKm(true)}>Editar KM</button>
           </div>
           <div className="card" style={{padding:16}}>
             <div className="sec">Financiero</div>
             {[["Tarifa",fmt(t.rate||0),"#166534"],["Gastos",`-${fmt(totalGastos)}`,"#ef4444"],["Ganancia",fmt(ganancia),ganancia>=0?"#166534":"#7f1d1d"]].map(([l,v,c],i)=>(
-              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f5f3ef"}}>
-                <span style={{fontSize:13,color:"#555"}}>{l}</span><span style={{fontWeight:700,fontSize:14,color:c}}>{v}</span>
-              </div>
+              <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid #f5f3ef"}}><span style={{fontSize:13,color:"#555"}}>{l}</span><span style={{fontWeight:700,fontSize:14,color:c}}>{v}</span></div>
             ))}
           </div>
           <div className="card" style={{padding:16}}>
@@ -684,10 +597,7 @@ function TripDetail({ trip:t, drivers, vehicles, clients, config, fmt, userId, o
             {(t.expenses||[]).length===0&&<div style={{textAlign:"center",padding:24,color:"#aaa"}}>Sin gastos</div>}
             {(t.expenses||[]).map(e=>(
               <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:10,border:"1.5px solid #ede9e3",marginBottom:8,background:"#fafaf8"}}>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:600,fontSize:13}}>{e.type}</div>
-                  <div style={{fontSize:11,color:"#888",marginTop:1}}>{e.description||"—"} · {fmtDate(e.date)}{e.litros?` · ${e.litros}L`:""}{e.precio_litro?` · ${fmt(e.precio_litro)}/L`:""}</div>
-                </div>
+                <div style={{flex:1}}><div style={{fontWeight:600,fontSize:13}}>{e.type}</div><div style={{fontSize:11,color:"#888",marginTop:1}}>{e.description||"—"} · {fmtDate(e.date)}{e.litros?` · ${e.litros}L`:""}{e.precio_litro?` · ${fmt(e.precio_litro)}/L`:""}</div></div>
                 <div style={{fontWeight:700,fontSize:14,color:"#ef4444"}}>{fmt(e.amount)}</div>
                 <button className="btn btn-outline btn-sm" style={{color:"#ef4444",borderColor:"#fecaca",padding:"3px 8px"}} onClick={()=>deleteExpense(e.id)}>✕</button>
               </div>
@@ -710,40 +620,20 @@ function TripDetail({ trip:t, drivers, vehicles, clients, config, fmt, userId, o
           </div>
         </div>
       </div>
-
-      {showKm&&(
-        <div className="modal-bg" onClick={()=>setShowKm(false)}>
-          <div className="modal" style={{maxWidth:380}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>🛣️ Registrar KM</div>
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM inicio</label><input className="field" type="number" value={kmInicio} onChange={e=>setKmInicio(e.target.value)} autoFocus/></div>
-              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM fin</label><input className="field" type="number" value={kmFin} onChange={e=>setKmFin(e.target.value)}/></div>
-              {kmInicio&&kmFin&&Number(kmFin)>Number(kmInicio)&&(
-                <div style={{background:"#eff6ff",border:"1.5px solid #93c5fd",borderRadius:10,padding:"10px 14px",textAlign:"center"}}>
-                  <div style={{fontSize:11,color:"#888",marginBottom:2}}>KM recorridos</div>
-                  <div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,color:"#1d4ed8"}}>{(Number(kmFin)-Number(kmInicio)).toLocaleString("es-AR")} km</div>
-                </div>
-              )}
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
-              <button className="btn btn-outline" onClick={()=>setShowKm(false)}>Cancelar</button>
-              <button className="btn btn-dark" onClick={guardarKm}>Guardar</button>
-            </div>
-          </div>
+      {showKm&&<div className="modal-bg" onClick={()=>setShowKm(false)}><div className="modal" style={{maxWidth:380}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>🛣️ Registrar KM</div>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM inicio</label><input className="field" type="number" value={kmInicio} onChange={e=>setKmInicio(e.target.value)} autoFocus/></div>
+          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>KM fin</label><input className="field" type="number" value={kmFin} onChange={e=>setKmFin(e.target.value)}/></div>
+          {kmInicio&&kmFin&&Number(kmFin)>Number(kmInicio)&&<div style={{background:"#eff6ff",border:"1.5px solid #93c5fd",borderRadius:10,padding:"10px 14px",textAlign:"center"}}><div style={{fontSize:11,color:"#888",marginBottom:2}}>KM recorridos</div><div style={{fontFamily:"'Syne',sans-serif",fontSize:24,fontWeight:800,color:"#1d4ed8"}}>{(Number(kmFin)-Number(kmInicio)).toLocaleString("es-AR")} km</div></div>}
         </div>
-      )}
-      {showNovedad&&(
-        <div className="modal-bg" onClick={()=>setShowNovedad(false)}>
-          <div className="modal" style={{maxWidth:420}} onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>📋 Nueva novedad</div>
-            <textarea className="field" rows={4} value={nuevaNovedad} onChange={e=>setNuevaNovedad(e.target.value)} style={{resize:"vertical"}} autoFocus/>
-            <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
-              <button className="btn btn-outline" onClick={()=>setShowNovedad(false)}>Cancelar</button>
-              <button className="btn btn-dark" onClick={guardarNovedad}>Registrar</button>
-            </div>
-          </div>
-        </div>
-      )}
+        <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowKm(false)}>Cancelar</button><button className="btn btn-dark" onClick={guardarKm}>Guardar</button></div>
+      </div></div>}
+      {showNovedad&&<div className="modal-bg" onClick={()=>setShowNovedad(false)}><div className="modal" style={{maxWidth:420}} onClick={e=>e.stopPropagation()}>
+        <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>📋 Nueva novedad</div>
+        <textarea className="field" rows={4} value={nuevaNovedad} onChange={e=>setNuevaNovedad(e.target.value)} style={{resize:"vertical"}} autoFocus/>
+        <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowNovedad(false)}>Cancelar</button><button className="btn btn-dark" onClick={guardarNovedad}>Registrar</button></div>
+      </div></div>}
       {showExpense&&<ExpenseModal onSave={async(form)=>{await supabase.from("trip_expenses").insert({...form,trip_id:t.id,empresa_id:userId});await reload();setShowExpense(false);}} onClose={()=>setShowExpense(false)}/>}
       {showEdit&&<TripModal trip={t} drivers={drivers} vehicles={vehicles} clients={clients} onSave={async(form)=>{await supabase.from("trips").update(form).eq("id",t.id);await reload();setShowEdit(false);}} onClose={()=>setShowEdit(false)}/>}
     </div>
@@ -756,29 +646,27 @@ function TripModal({ trip, drivers, vehicles, clients, onSave, onClose }) {
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const handleClient=(id)=>{const c=clients.find(c=>String(c.id)===String(id));set("client_id",id);set("client_name",c?c.name:"");};
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{maxWidth:580}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{trip?"Editar viaje":"Nuevo viaje"}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Origen *</label><input className="field" value={form.origin} onChange={e=>set("origin",e.target.value)} autoFocus/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Destino *</label><input className="field" value={form.destination} onChange={e=>set("destination",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha salida</label><input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Retorno estimado</label><input className="field" type="date" value={form.estimated_return} onChange={e=>set("estimated_return",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Chofer</label><select className="field" value={form.driver_id} onChange={e=>set("driver_id",e.target.value)}><option value="">— Sin chofer —</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Vehículo</label><select className="field" value={form.vehicle_id} onChange={e=>set("vehicle_id",e.target.value)}><option value="">— Sin vehículo —</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}</select></div>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Cliente</label><select className="field" value={form.client_id} onChange={e=>handleClient(e.target.value)}><option value="">— Sin cliente —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Carga</label><input className="field" value={form.cargo} onChange={e=>set("cargo",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Peso (kg)</label><input className="field" type="number" value={form.cargo_weight} onChange={e=>set("cargo_weight",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tarifa</label><input className="field" type="number" value={form.rate} onChange={e=>set("rate",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Estado</label><select className="field" value={form.status} onChange={e=>set("status",e.target.value)}>{Object.entries(TRIP_STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.origin||!form.destination)return;setSaving(true);await onSave({...form,driver_id:form.driver_id||null,vehicle_id:form.vehicle_id||null,client_id:form.client_id||null,rate:Number(form.rate)||0,cargo_weight:Number(form.cargo_weight)||null,estimated_return:form.estimated_return||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
-        </div>
+    <div className="modal-bg" onClick={onClose}><div className="modal" style={{maxWidth:580}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{trip?"Editar viaje":"Nuevo viaje"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Origen *</label><input className="field" value={form.origin} onChange={e=>set("origin",e.target.value)} autoFocus/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Destino *</label><input className="field" value={form.destination} onChange={e=>set("destination",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha salida</label><input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Retorno estimado</label><input className="field" type="date" value={form.estimated_return} onChange={e=>set("estimated_return",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Chofer</label><select className="field" value={form.driver_id} onChange={e=>set("driver_id",e.target.value)}><option value="">— Sin chofer —</option>{drivers.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Vehículo</label><select className="field" value={form.vehicle_id} onChange={e=>set("vehicle_id",e.target.value)}><option value="">— Sin vehículo —</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.plate} — {v.brand} {v.model}</option>)}</select></div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Cliente</label><select className="field" value={form.client_id} onChange={e=>handleClient(e.target.value)}><option value="">— Sin cliente —</option>{clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Carga</label><input className="field" value={form.cargo} onChange={e=>set("cargo",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Peso (kg)</label><input className="field" type="number" value={form.cargo_weight} onChange={e=>set("cargo_weight",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tarifa</label><input className="field" type="number" value={form.rate} onChange={e=>set("rate",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Estado</label><select className="field" value={form.status} onChange={e=>set("status",e.target.value)}>{Object.entries(TRIP_STATUS).map(([k,v])=><option key={k} value={k}>{v.label}</option>)}</select></div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
       </div>
-    </div>
+      <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.origin||!form.destination)return;setSaving(true);await onSave({...form,driver_id:form.driver_id||null,vehicle_id:form.vehicle_id||null,client_id:form.client_id||null,rate:Number(form.rate)||0,cargo_weight:Number(form.cargo_weight)||null,estimated_return:form.estimated_return||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+      </div>
+    </div></div>
   );
 }
 
@@ -787,25 +675,23 @@ function DriverModal({ driver, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{driver?"Editar chofer":"Nuevo chofer"}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Nombre *</label><input className="field" value={form.name} onChange={e=>set("name",e.target.value)} autoFocus/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>DNI</label><input className="field" value={form.dni} onChange={e=>set("dni",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Teléfono</label><input className="field" value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>N° Licencia</label><input className="field" value={form.license_number} onChange={e=>set("license_number",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. licencia</label><input className="field" type="date" value={form.license_expiry} onChange={e=>set("license_expiry",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha ingreso</label><input className="field" type="date" value={form.hire_date} onChange={e=>set("hire_date",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Sueldo mensual</label><input className="field" type="number" value={form.salary} onChange={e=>set("salary",e.target.value)}/></div>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.name)return;setSaving(true);await onSave({...form,salary:Number(form.salary)||0,license_expiry:form.license_expiry||null,hire_date:form.hire_date||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
-        </div>
+    <div className="modal-bg" onClick={onClose}><div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{driver?"Editar chofer":"Nuevo chofer"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Nombre *</label><input className="field" value={form.name} onChange={e=>set("name",e.target.value)} autoFocus/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>DNI</label><input className="field" value={form.dni} onChange={e=>set("dni",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Teléfono</label><input className="field" value={form.phone} onChange={e=>set("phone",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>N° Licencia</label><input className="field" value={form.license_number} onChange={e=>set("license_number",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. licencia</label><input className="field" type="date" value={form.license_expiry} onChange={e=>set("license_expiry",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Fecha ingreso</label><input className="field" type="date" value={form.hire_date} onChange={e=>set("hire_date",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Sueldo mensual</label><input className="field" type="number" value={form.salary} onChange={e=>set("salary",e.target.value)}/></div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
       </div>
-    </div>
+      <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.name)return;setSaving(true);await onSave({...form,salary:Number(form.salary)||0,license_expiry:form.license_expiry||null,hire_date:form.hire_date||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+      </div>
+    </div></div>
   );
 }
 
@@ -814,25 +700,35 @@ function VehicleModal({ vehicle, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{vehicle?"Editar vehículo":"Nuevo vehículo"}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Patente *</label><input className="field" value={form.plate} onChange={e=>set("plate",e.target.value)} autoFocus/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Marca</label><input className="field" value={form.brand} onChange={e=>set("brand",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Modelo</label><input className="field" value={form.model} onChange={e=>set("model",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Año</label><input className="field" type="number" value={form.year} onChange={e=>set("year",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. seguro</label><input className="field" type="date" value={form.insurance_expiry} onChange={e=>set("insurance_expiry",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. VTV</label><input className="field" type="date" value={form.vtv_expiry} onChange={e=>set("vtv_expiry",e.target.value)}/></div>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. habilitación</label><input className="field" type="date" value={form.habilitacion_expiry} onChange={e=>set("habilitacion_expiry",e.target.value)}/></div>
-          <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
+    <div className="modal-bg" onClick={onClose}><div className="modal" style={{maxWidth:520}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:18,fontWeight:800,marginBottom:18}}>{vehicle?"Editar vehículo":"Nuevo vehículo"}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Patente *</label><input className="field" value={form.plate} onChange={e=>set("plate",e.target.value)} autoFocus/></div>
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Marca</label>
+          <select className="field" value={form.brand} onChange={e=>set("brand",e.target.value)}>
+            <option value="">— Seleccionar —</option>
+            {TRUCK_BRANDS.map(b=><option key={b}>{b}</option>)}
+          </select>
         </div>
-        <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.plate)return;setSaving(true);await onSave({...form,year:Number(form.year)||null,insurance_expiry:form.insurance_expiry||null,vtv_expiry:form.vtv_expiry||null,habilitacion_expiry:form.habilitacion_expiry||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Modelo</label><input className="field" value={form.model} onChange={e=>set("model",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Año</label><input className="field" type="number" value={form.year} onChange={e=>set("year",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. seguro</label><input className="field" type="date" value={form.insurance_expiry} onChange={e=>set("insurance_expiry",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. VTV</label><input className="field" type="date" value={form.vtv_expiry} onChange={e=>set("vtv_expiry",e.target.value)}/></div>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Venc. habilitación</label><input className="field" type="date" value={form.habilitacion_expiry} onChange={e=>set("habilitacion_expiry",e.target.value)}/></div>
+        <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:20}}>
+          <label style={{fontSize:12,fontWeight:600,color:"#555"}}>Activo</label>
+          <button onClick={()=>set("active",!form.active)} style={{width:40,height:22,borderRadius:11,background:form.active?"#18181b":"#e2dfd8",border:"none",cursor:"pointer",position:"relative",transition:"background .2s"}}>
+            <div style={{width:16,height:16,borderRadius:"50%",background:"#fff",position:"absolute",top:3,left:form.active?21:3,transition:"left .2s"}}/>
+          </button>
         </div>
+        <div style={{gridColumn:"1/-1"}}><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Notas</label><textarea className="field" rows={2} value={form.notes} onChange={e=>set("notes",e.target.value)} style={{resize:"none"}}/></div>
       </div>
-    </div>
+      <div style={{display:"flex",gap:8,marginTop:18,justifyContent:"flex-end"}}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-dark" disabled={saving} onClick={async()=>{if(!form.plate)return;setSaving(true);await onSave({...form,year:Number(form.year)||null,insurance_expiry:form.insurance_expiry||null,vtv_expiry:form.vtv_expiry||null,habilitacion_expiry:form.habilitacion_expiry||null});setSaving(false);}}>{saving?"Guardando...":"Guardar"}</button>
+      </div>
+    </div></div>
   );
 }
 
@@ -843,26 +739,22 @@ function ExpenseModal({ onSave, onClose }) {
   const isCombustible=form.type==="Combustible";
   useEffect(()=>{if(isCombustible&&form.litros&&form.precio_litro)set("amount",(Number(form.litros)*Number(form.precio_litro)).toFixed(2));},[form.litros,form.precio_litro]);
   return (
-    <div className="modal-bg" onClick={onClose}>
-      <div className="modal" style={{maxWidth:420}} onClick={e=>e.stopPropagation()}>
-        <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>💸 Nuevo gasto</div>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tipo</label><select className="field" value={form.type} onChange={e=>set("type",e.target.value)}>{EXPENSE_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
-          {isCombustible&&(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Litros</label><input className="field" type="number" placeholder="0" value={form.litros} onChange={e=>set("litros",e.target.value)}/></div>
-              <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Precio/litro</label><input className="field" type="number" placeholder="0" value={form.precio_litro} onChange={e=>set("precio_litro",e.target.value)}/></div>
-            </div>
-          )}
-          <input className="field" placeholder="Descripción" value={form.description} onChange={e=>set("description",e.target.value)}/>
-          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Monto *</label><input className="field" type="number" placeholder="0" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div>
-          <input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
-          <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
-          <button className="btn btn-red" disabled={saving} onClick={async()=>{if(!form.amount)return;setSaving(true);await onSave({...form,amount:Number(form.amount),litros:Number(form.litros)||null,precio_litro:Number(form.precio_litro)||null});setSaving(false);}}>{saving?"Guardando...":"Registrar"}</button>
-        </div>
+    <div className="modal-bg" onClick={onClose}><div className="modal" style={{maxWidth:420}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>💸 Nuevo gasto</div>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Tipo</label><select className="field" value={form.type} onChange={e=>set("type",e.target.value)}>{EXPENSE_TYPES.map(t=><option key={t}>{t}</option>)}</select></div>
+        {isCombustible&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Litros</label><input className="field" type="number" placeholder="0" value={form.litros} onChange={e=>set("litros",e.target.value)}/></div>
+          <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Precio/litro</label><input className="field" type="number" placeholder="0" value={form.precio_litro} onChange={e=>set("precio_litro",e.target.value)}/></div>
+        </div>}
+        <input className="field" placeholder="Descripción" value={form.description} onChange={e=>set("description",e.target.value)}/>
+        <div><label style={{fontSize:11,fontWeight:600,color:"#555",display:"block",marginBottom:4}}>Monto *</label><input className="field" type="number" placeholder="0" value={form.amount} onChange={e=>set("amount",e.target.value)}/></div>
+        <input className="field" type="date" value={form.date} onChange={e=>set("date",e.target.value)}/>
       </div>
-    </div>
+      <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
+        <button className="btn btn-outline" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-red" disabled={saving} onClick={async()=>{if(!form.amount)return;setSaving(true);await onSave({...form,amount:Number(form.amount),litros:Number(form.litros)||null,precio_litro:Number(form.precio_litro)||null});setSaving(false);}}>{saving?"Guardando...":"Registrar"}</button>
+      </div>
+    </div></div>
   );
 }

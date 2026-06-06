@@ -204,6 +204,14 @@ function EmployeeDetail({ employee: e, fmt, config, userId, onBack, reload }) {
         <button className="btn btn-outline btn-sm" onClick={() => setShowRecibo(true)}>🧾 Recibo</button>
         <button className="btn btn-outline btn-sm" onClick={generarLegajoPDF}>📄 Legajo</button>
         <button className="btn btn-outline btn-sm" onClick={() => setShowEdit(true)}>✏️ Editar</button>
+        {e.position?.toLowerCase().includes("chofer") && (
+          <button className="btn btn-outline btn-sm" onClick={async () => {
+            const { data: existing } = await supabase.from("drivers").select("id").eq("empresa_id", userId).eq("name", e.name).maybeSingle();
+            if (existing) { alert("Este chofer ya existe en Transporte"); return; }
+            await supabase.from("drivers").insert({ empresa_id:userId, name:e.name, dni:e.dni||null, phone:e.phone||null, email:e.email||null, salary:e.salary||0, hire_date:e.hire_date||null, active:true });
+            alert("✅ Chofer agregado en Transporte");
+          }}>🚛 → Transporte</button>
+        )}
         <button className="btn btn-outline btn-sm" style={{ color:"#ef4444", borderColor:"#fecaca" }} onClick={deleteEmployee}>🗑</button>
       </div>
 

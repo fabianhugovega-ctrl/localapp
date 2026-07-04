@@ -6,6 +6,10 @@ import Nomina from './Nomina.jsx';
 import Transporte from './Transporte.jsx';
 import Prestamos from './Prestamos.jsx';
 import ParteDiarioChofer from './ParteDiarioChofer.jsx';
+import Guardias from './Guardias.jsx';
+import Puestos from './Puestos.jsx';
+import Turnos from './Turnos.jsx';
+import Liquidaciones from './Liquidaciones.jsx';
 import Login from './Login.jsx';
 import { exportCaja, exportClientes, exportStock, exportAgenda } from './exportExcel.js';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
@@ -18,7 +22,7 @@ const DEFAULT_CONFIG = {
   catIngreso:["Venta","Otro ingreso"],
   catEgreso:["Proveedor","Servicios","Alquiler","Personal","Otro gasto"],
   services:["Corte","Coloración","Consulta","Servicio general","Entrega"],
-  modules:["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","config"],
+  modules:["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","guardias","puestos","turnos","liquidaciones","config"],
   presupuestoMensual:0,
   darkMode:false,
 };
@@ -58,7 +62,11 @@ const ALL_MODULES=[
   {key:"transporte",icon:"🚛",label:"Transporte"},
   {key:"prestamos",icon:"💰",label:"Préstamos"},
   {key:"proformas",icon:"🧾",label:"Proformas"},
-  {key:"config",icon:"⚙",label:"Config"},
+  {key:"guardias",icon:"🛡️",label:"Guardias"},
+  {key:"puestos",icon:"📍",label:"Puestos"},
+  {key:"turnos",icon:"🕐",label:"Turnos"},
+  {key:"liquidaciones",icon:"💵",label:"Liquidaciones"},
+{key:"config",icon:"⚙",label:"Config"},
 ];
 const DAYS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
 const DAYS_FULL=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
@@ -182,9 +190,9 @@ export default function App() {
     if(data&&data.length>0){
       const cfg={};
       data.forEach(row=>{cfg[row.key]=row.value;});
-      const merged={...DEFAULT_CONFIG,...cfg};
+      const merged={...DEFAULT_CONFIG,...cfg,modules:[...new Set([...DEFAULT_CONFIG.modules,...(Array.isArray(cfg.modules)?cfg.modules:[])])].filter(Boolean)};
       setConfig(merged);
-      if(!cfg.appName)setShowOnboarding(true);
+      
     } else {setShowOnboarding(true);}
   };
 
@@ -371,6 +379,10 @@ export default function App() {
         {tab==="nomina"&&<Nomina config={config} userId={user.id}/>}
         {tab==="transporte"&&<Transporte clients={clients} config={config} userId={user.id}/>}
         {tab==="prestamos"&&<Prestamos clients={clients} config={config} userId={user.id}/>}
+        {tab==="guardias"&&<Guardias config={config} userId={user.id}/>}
+        {tab==="turnos"&&<Turnos config={config} userId={user.id}/>}
+        {tab==="liquidaciones"&&<Liquidaciones config={config} userId={user.id}/>}
+        {tab==="puestos"&&<Puestos config={config} userId={user.id}/>}
         {tab==="proformas"&&<Proformas clients={clients} products={products} config={config} userId={user.id}/>}
         {tab==="config"&&<Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id} saveConfigKey={saveConfigKey}/>}
       </div>
@@ -1109,7 +1121,7 @@ function Caja({movements,clients,products=[],saldo,totalIngresos,totalEgresos,co
 }
 
 function Config({config,setConfig,reload,userId,saveConfigKey}){
-  const [draft,setDraft]=useState({...config});
+  const allModuleKeys=ALL_MODULES.map(m=>m.key);const mergedModules=[...new Set([...(config.modules||[]),...allModuleKeys.filter(k=>k!=="config")])];const [draft,setDraft]=useState({...config,modules:mergedModules});
   const [saved,setSaved]=useState(false);
   const [newTag,setNewTag]=useState("");
   const [newCI,setNewCI]=useState("");
@@ -1278,4 +1290,5 @@ function Config({config,setConfig,reload,userId,saveConfigKey}){
     </div>
   );
 }
+
 

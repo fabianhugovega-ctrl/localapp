@@ -937,6 +937,8 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
   const [adjQty,setAdjQty]=useState("");
   const [adjType,setAdjType]=useState("add");
   const [saving,setSaving]=useState(false);
+  const [showEdit,setShowEdit]=useState(null);
+  const [editForm,setEditForm]=useState({});
   const cats=["Todos",...Array.from(new Set(products.map(p=>p.category).filter(Boolean)))];
   const filtered=products.filter(p=>(p.name.toLowerCase().includes(search.toLowerCase())||(p.sku||"").toLowerCase().includes(search.toLowerCase()))&&(filterCat==="Todos"||p.category===filterCat));
   const addP=async()=>{if(!newP.name||!newP.price)return;setSaving(true);await supabase.from('products').insert({empresa_id:userId,name:newP.name,sku:newP.sku,category:newP.category,price:Number(newP.price),cost:Number(newP.cost)||0,stock:Number(newP.stock)||0,min_stock:Number(newP.minStock)||5});await reload();setSaving(false);setNewP({name:"",sku:"",category:"",price:"",cost:"",stock:"",minStock:""});setShowNew(false);};
@@ -992,8 +994,7 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
               <td style={{padding:"10px 13px",fontWeight:700,fontSize:14,color:p.stock===0?"#7f1d1d":p.stock<=p.min_stock?"#854d0e":"#18181b"}}>{p.stock}</td>
               <td style={{padding:"10px 13px",fontSize:12,color:"#888"}}>{p.min_stock}</td>
               <td style={{padding:"10px 13px"}}><span className={`pill ${s.cls}`}>{s.label}</span></td>
-              <td style={{padding:"10px 13px"}}><button className="btn btn-outline btn-sm" onClick={()=>setShowAdj(p)}>Ajustar</button></td>
-            </tr>;})}
+              <td style={{padding:"10px 13px"}}><button className="btn btn-outline btn-sm" style={{marginRight:6}} onClick={()=>{setEditForm({name:p.name,sku:p.sku||"",category:p.category||"",price:p.price,cost:p.cost||"",minStock:p.min_stock});setShowEdit(p);}}>Editar</button><button className="btn btn-outline btn-sm" onClick={()=>setShowAdj(p)}>Ajustar</button></td></tr>;})}
             </tbody>
           </table>
           {filtered.length===0&&<div style={{textAlign:"center",padding:28,color:"#aaa"}}>Sin productos</div>}
@@ -1020,6 +1021,21 @@ function Stock({products,lowStock,fmt,reload,isMobile,userId}){
         {adjQty&&<div style={{marginTop:8,fontSize:13,color:"#555"}}>Resultado: <strong>{adjType==="add"?showAdj.stock+Number(adjQty):Math.max(0,showAdj.stock-Number(adjQty))}</strong></div>}
         <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}><button className="btn btn-outline" onClick={()=>setShowAdj(null)}>Cancelar</button><button className="btn btn-dark" onClick={applyAdj}>Confirmar</button></div>
       </div></div>}
+      {showEdit&&<div className="modal-bg" onClick={()=>setShowEdit(null)}><div className="modal" onClick={e=>e.stopPropagation()}>
+  <div style={{fontFamily:"'Syne',sans-serif",fontSize:17,fontWeight:800,marginBottom:14}}>Editar producto</div>
+  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+    <input className="field" style={{gridColumn:"1/-1"}} placeholder="Nombre *" value={editForm.name} onChange={e=>setEditForm(p=>({...p,name:e.target.value}))}/>
+    <input className="field" placeholder="SKU" value={editForm.sku} onChange={e=>setEditForm(p=>({...p,sku:e.target.value}))}/>
+    <input className="field" placeholder="Categoría" value={editForm.category} onChange={e=>setEditForm(p=>({...p,category:e.target.value}))}/>
+    <input className="field" placeholder="Precio *" type="number" value={editForm.price} onChange={e=>setEditForm(p=>({...p,price:e.target.value}))}/>
+    <input className="field" placeholder="Costo" type="number" value={editForm.cost} onChange={e=>setEditForm(p=>({...p,cost:e.target.value}))}/>
+    <input className="field" placeholder="Stock mínimo" type="number" value={editForm.minStock} onChange={e=>setEditForm(p=>({...p,minStock:e.target.value}))}/>
+  </div>
+  <div style={{display:"flex",gap:8,marginTop:14,justifyContent:"flex-end"}}>
+    <button className="btn btn-outline" onClick={()=>setShowEdit(null)}>Cancelar</button>
+    <button className="btn btn-dark" onClick={async()=>{if(!editForm.name||!editForm.price)return;setSaving(true);await supabase.from('products').update({name:editForm.name,sku:editForm.sku,category:editForm.category,price:Number(editForm.price),cost:Number(editForm.cost)||0,min_stock:Number(editForm.minStock)||0}).eq('id',showEdit.id);await reload();setSaving(false);setShowEdit(null);}} disabled={saving}>{saving?"Guardando...":"Guardar"}</button>
+  </div>
+</div></div>}
     </div>
   );
 }

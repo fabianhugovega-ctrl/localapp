@@ -35,7 +35,7 @@ export default function Liquidaciones() {
     // Traer turnos del mes con asistencia
     const { data: turnos } = await supabase
       .from("turnos")
-      .select("*, guardias(nombre, valor_hora), asistencia(*)")
+      .select("*, guardias(nombre, valor_hora), puestos(nombre), asistencia(*)")
       .gte("fecha", desde)
       .lte("fecha", hasta);
 
@@ -50,7 +50,7 @@ export default function Liquidaciones() {
     (liqs || []).forEach((l) => { liqMap[l.guardia_id] = l; });
     setLiquidaciones(liqMap);
 
-    // Calcular por guardia
+    // Calcular por guardia (cálculo EN VIVO, refleja los turnos actuales)
     const porGuardia = {};
     guardias.forEach((g) => {
       porGuardia[g.id] = {
@@ -76,6 +76,21 @@ export default function Liquidaciones() {
     setLoading(false);
   }
 
+  // Arma el snapshot del detalle de turnos para congelar al cerrar
+  function armarDetalle(item) {
+    return item.turnos.map((t) => ({
+      fecha: t.fecha,
+      puesto: t.puestos?.nombre || null,
+      tipo: t.tipo,
+      hora_inicio: t.hora_inicio,
+      hora_fin: t.hora_fin,
+      hora_real_inicio: t.asist?.hora_real_inicio || null,
+      hora_real_fin: t.asist?.hora_real_fin || null,
+      horas: t.horas,
+      monto: t.monto,
+    }));
+  }
+
   async function cerrarLiquidacion(item) {
     setSaving(item.guardia.id);
     const { data: userData } = await supabase.auth.getUser();
@@ -86,6 +101,7 @@ export default function Liquidaciones() {
       anio,
       total_horas: item.total_horas,
       total_a_cobrar: item.total_monto,
+      detalle: armarDetalle(item),   // snapshot congelado
       estado: "cerrada",
     };
     if (existing) {
@@ -108,6 +124,20 @@ export default function Liquidaciones() {
   function exportarPDF(item) {
     const doc = new jsPDF();
     const liq = liquidaciones[item.guardia.id];
+    const cerrada = liq?.estado === "cerrada";
+
+    // Si está cerrada, usar el SNAPSHOT guardado; si no, el cálculo en vivo
+    const detalle = cerrada && Array.isArray(liq.detalle) ? liq.detalle : item.turnos.map((t) => ({
+      fecha: t.fecha,
+      puesto: t.puestos?.nombre || null,
+      tipo: t.tipo,
+      hora_real_inicio: t.asist?.hora_real_inicio || null,
+      hora_real_fin: t.asist?.hora_real_fin || null,
+      horas: t.horas,
+      monto: t.monto,
+    }));
+    const totalHoras = cerrada ? liq.total_horas : item.total_horas;
+    const totalMonto = cerrada ? liq.total_a_cobrar : item.total_monto;
 
     // Header
     doc.setFontSize(20);
@@ -140,22 +170,21 @@ export default function Liquidaciones() {
     doc.setDrawColor(220);
     doc.line(20, 90, 190, 90);
 
-    // Tabla de turnos
+    // Tabla de turnos (desde snapshot o en vivo)
     autoTable(doc, {
       startY: 95,
-      head: [["Fecha", "Puesto", "Turno", "H. Progr.", "H. Real", "Horas", "Monto"]],
-      body: item.turnos.map((t) => [
+      head: [["Fecha", "Puesto", "Turno", "Horario real", "Horas", "Monto"]],
+      body: detalle.map((t) => [
         fmtDate(t.fecha),
-        t.puestos?.nombre || "—",
-        t.tipo,
-        `${t.hora_inicio} → ${t.hora_fin}`,
-        t.asist ? `${t.asist.hora_real_inicio} → ${t.asist.hora_real_fin}` : "Sin registrar",
+        t.puesto || "—",
+        t.tipo || "—",
+        (t.hora_real_inicio && t.hora_real_fin) ? `${t.hora_real_inicio} → ${t.hora_real_fin}` : "Sin registrar",
         t.horas > 0 ? `${t.horas}hs` : "—",
         t.monto > 0 ? fmtMonto(t.monto) : "—",
       ]),
       styles: { fontSize: 8.5 },
       headStyles: { fillColor: [24, 24, 27], textColor: 255 },
-      columnStyles: { 6: { halign: "right" } },
+      columnStyles: { 5: { halign: "right" } },
     });
 
     const finalY = doc.lastAutoTable.finalY + 10;
@@ -164,12 +193,12 @@ export default function Liquidaciones() {
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(0);
-    doc.text(`Total horas trabajadas: ${item.total_horas}hs`, 20, finalY);
+    doc.text(`Total horas trabajadas: ${totalHoras}hs`, 20, finalY);
     doc.setFontSize(14);
     doc.setTextColor(22, 101, 52);
-    doc.text(`TOTAL A COBRAR: ${fmtMonto(item.total_monto)}`, 20, finalY + 10);
+    doc.text(`TOTAL A COBRAR: ${fmtMonto(totalMonto)}`, 20, finalY + 10);
 
-    if (liq?.estado === "cerrada") {
+    if (cerrada) {
       doc.setFontSize(10);
       doc.setTextColor(150);
       doc.text("Liquidación cerrada", 20, finalY + 22);
@@ -222,8 +251,32 @@ export default function Liquidaciones() {
           {resumen.map((item) => {
             const liq = liquidaciones[item.guardia.id];
             const cerrada = liq?.estado === "cerrada";
+
+            // Cuando está cerrada, se muestran los valores del SNAPSHOT (congelados),
+            // no el cálculo en vivo.
+            const detalleMostrar = cerrada && Array.isArray(liq.detalle) ? liq.detalle : item.turnos.map((t) => ({
+              id: t.id,
+              fecha: t.fecha,
+              puesto: t.puestos?.nombre || null,
+              tipo: t.tipo,
+              hora_real_inicio: t.asist?.hora_real_inicio || null,
+              hora_real_fin: t.asist?.hora_real_fin || null,
+              horas: t.horas,
+              monto: t.monto,
+            }));
+            const totalHorasMostrar = cerrada ? Number(liq.total_horas) : item.total_horas;
+            const totalMontoMostrar = cerrada ? Number(liq.total_a_cobrar) : item.total_monto;
+
+            // Detectar horas nuevas cargadas DESPUÉS del cierre
+            const hayCambios = cerrada && (
+              Math.abs(item.total_horas - Number(liq.total_horas)) > 0.001 ||
+              Math.abs(item.total_monto - Number(liq.total_a_cobrar)) > 0.001
+            );
+            const horasNuevas = hayCambios ? (item.total_horas - Number(liq.total_horas)) : 0;
+            const montoNuevo = hayCambios ? (item.total_monto - Number(liq.total_a_cobrar)) : 0;
+
             return (
-              <div key={item.guardia.id} className="card" style={{ padding: 0, overflow: "hidden", opacity: cerrada ? 0.85 : 1 }}>
+              <div key={item.guardia.id} className="card" style={{ padding: 0, overflow: "hidden", opacity: cerrada ? 0.95 : 1 }}>
                 {/* Header guardia */}
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", background: cerrada ? "#f0fdf4" : "#fafaf8", borderBottom: "1px solid #eee" }}>
                   <div>
@@ -254,7 +307,21 @@ export default function Liquidaciones() {
                   </div>
                 </div>
 
-                {/* Tabla turnos */}
+                {/* Aviso de horas nuevas sin liquidar */}
+                {hayCambios && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", background: "#fff7ed", borderBottom: "1px solid #fed7aa" }}>
+                    <span style={{ fontSize: 16 }}>⚠️</span>
+                    <div style={{ fontSize: 13, color: "#9a3412", flex: 1 }}>
+                      Se cargaron <strong>{horasNuevas > 0 ? `${horasNuevas.toFixed(2)}hs nuevas` : "cambios"}</strong>
+                      {montoNuevo > 0 && <> (<strong>{fmtMonto(montoNuevo)}</strong>)</>} después de cerrar esta liquidación. No están incluidas en el total cerrado.
+                    </div>
+                    <button className="btn btn-outline btn-sm" onClick={() => reabrirLiquidacion(item.guardia.id)}>
+                      Reabrir para incluir
+                    </button>
+                  </div>
+                )}
+
+                {/* Tabla turnos (snapshot si está cerrada, en vivo si no) */}
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#f5f5f5", fontSize: 12, color: "#666" }}>
@@ -267,16 +334,16 @@ export default function Liquidaciones() {
                     </tr>
                   </thead>
                   <tbody>
-                    {item.turnos.map((t, i) => (
-                      <tr key={t.id} style={{ borderTop: "1px solid #eee", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                    {detalleMostrar.map((t, i) => (
+                      <tr key={t.id || i} style={{ borderTop: "1px solid #eee", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
                         <td style={td}>{fmtDate(t.fecha)}</td>
-                        <td style={td}>{t.puestos?.nombre || "—"}</td>
+                        <td style={td}>{t.puesto || "—"}</td>
                         <td style={td}>
                           <span style={{ fontSize: 11, padding: "2px 7px", borderRadius: 8, background: "#f0f0f0", textTransform: "capitalize" }}>{t.tipo}</span>
                         </td>
                         <td style={td}>
-                          {t.asist ? (
-                            <span style={{ color: "#2e7d32", fontWeight: 500 }}>{t.asist.hora_real_inicio} → {t.asist.hora_real_fin}</span>
+                          {(t.hora_real_inicio && t.hora_real_fin) ? (
+                            <span style={{ color: "#2e7d32", fontWeight: 500 }}>{t.hora_real_inicio} → {t.hora_real_fin}</span>
                           ) : (
                             <span style={{ color: "#aaa", fontSize: 12 }}>Sin asistencia</span>
                           )}
@@ -295,10 +362,10 @@ export default function Liquidaciones() {
                 {/* Totales */}
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 24, padding: "12px 16px", borderTop: "1.5px solid #eee", background: "#fafaf8" }}>
                   <div style={{ fontSize: 13, color: "#555" }}>
-                    Total horas: <strong>{item.total_horas}hs</strong>
+                    Total horas: <strong>{totalHorasMostrar}hs</strong>
                   </div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#166534" }}>
-                    Total: {fmtMonto(item.total_monto)}
+                    Total: {fmtMonto(totalMontoMostrar)}
                   </div>
                 </div>
               </div>

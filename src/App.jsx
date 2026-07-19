@@ -193,8 +193,6 @@ export default function App() {
     if(data&&data.length>0){
       const cfg={};
       data.forEach(row=>{cfg[row.key]=row.value;});
-      console.log("MODULOS DE LA BASE:", cfg.modules);
-      console.log("CANTIDAD DE FILAS:", data.length);
       const savedModules=Array.isArray(cfg.modules)?cfg.modules:null;
       const merged={...DEFAULT_CONFIG,...cfg,modules:savedModules&&savedModules.length>0?savedModules:DEFAULT_CONFIG.modules};
       setConfig(merged);

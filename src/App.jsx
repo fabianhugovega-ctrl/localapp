@@ -8,6 +8,7 @@ import Prestamos from './Prestamos.jsx';
 import ParteDiarioChofer from './ParteDiarioChofer.jsx';
 import Guardias from './Guardias.jsx';
 import Puestos from './Puestos.jsx';
+import Visitas from './Visitas.jsx';
 import Turnos from './Turnos.jsx';
 import Liquidaciones from './Liquidaciones.jsx';
 import Login from './Login.jsx';
@@ -22,7 +23,7 @@ const DEFAULT_CONFIG = {
   catIngreso:["Venta","Otro ingreso"],
   catEgreso:["Proveedor","Servicios","Alquiler","Personal","Otro gasto"],
   services:["Corte","Coloración","Consulta","Servicio general","Entrega"],
-  modules:["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","guardias","puestos","turnos","liquidaciones","config"],
+  modules:["dashboard","clientes","agenda","stock","caja","servicios","nomina","transporte","prestamos","proformas","guardias","puestos","turnos","liquidaciones","visitas","config"],
   presupuestoMensual:0,
   darkMode:false,
 };
@@ -64,6 +65,7 @@ const ALL_MODULES=[
   {key:"proformas",icon:"🧾",label:"Proformas"},
   {key:"guardias",icon:"🛡️",label:"Guardias"},
   {key:"puestos",icon:"📍",label:"Puestos"},
+  {key:"visitas",icon:"🔧",label:"Visitas"},
   {key:"turnos",icon:"🕐",label:"Turnos"},
   {key:"liquidaciones",icon:"💵",label:"Liquidaciones"},
 {key:"config",icon:"⚙",label:"Config"},
@@ -185,14 +187,17 @@ export default function App() {
 
 
 
-  const loadConfig=async()=>{
+  
+    const loadConfig=async()=>{
     const {data}=await supabase.from('config').select('*').eq('empresa_id',user.id);
     if(data&&data.length>0){
       const cfg={};
       data.forEach(row=>{cfg[row.key]=row.value;});
-      const merged={...DEFAULT_CONFIG,...cfg,modules:[...new Set([...DEFAULT_CONFIG.modules,...(Array.isArray(cfg.modules)?cfg.modules:[])])].filter(Boolean)};
+      console.log("MODULOS DE LA BASE:", cfg.modules);
+      console.log("CANTIDAD DE FILAS:", data.length);
+      const savedModules=Array.isArray(cfg.modules)?cfg.modules:null;
+      const merged={...DEFAULT_CONFIG,...cfg,modules:savedModules&&savedModules.length>0?savedModules:DEFAULT_CONFIG.modules};
       setConfig(merged);
-      
     } else {setShowOnboarding(true);}
   };
 
@@ -383,6 +388,7 @@ export default function App() {
         {tab==="turnos"&&<Turnos config={config} userId={user.id}/>}
         {tab==="liquidaciones"&&<Liquidaciones config={config} userId={user.id}/>}
         {tab==="puestos"&&<Puestos config={config} userId={user.id}/>}
+        {tab==="visitas"&&<Visitas config={config} userId={user.id}/>}
         {tab==="proformas"&&<Proformas clients={clients} products={products} config={config} userId={user.id}/>}
         {tab==="config"&&<Config config={config} setConfig={setConfig} reload={loadAll} userId={user.id} saveConfigKey={saveConfigKey}/>}
       </div>
@@ -1137,7 +1143,7 @@ function Caja({movements,clients,products=[],saldo,totalIngresos,totalEgresos,co
 }
 
 function Config({config,setConfig,reload,userId,saveConfigKey}){
-  const allModuleKeys=ALL_MODULES.map(m=>m.key);const mergedModules=[...new Set([...(config.modules||[]),...allModuleKeys.filter(k=>k!=="config")])];const [draft,setDraft]=useState({...config,modules:mergedModules});
+  const [draft,setDraft]=useState({...config,modules:config.modules||DEFAULT_CONFIG.modules});
   const [saved,setSaved]=useState(false);
   const [newTag,setNewTag]=useState("");
   const [newCI,setNewCI]=useState("");
